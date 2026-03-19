@@ -6,7 +6,6 @@ This is the more advanced integration pattern — decoupled processing with sepa
 
 > Your data will be securely stored in your AWS account and will not be shared or used for model training. It is not recommended to share private information because the security of data with WhatsApp is not guaranteed.
 
-<!-- TODO: Add demo GIFs
 | Voice notes | Image |
 |----------|------------|
 |![Process Voice notes](./images/voice_note.gif)| ![Process image](./images/image_send.gif) |
@@ -14,7 +13,6 @@ This is the more advanced integration pattern — decoupled processing with sepa
 | Video | Document |
 |--------------|--------------|
 |![Process Video](./images/video_send.gif)|![Process Documents](./images/documents.gif)|
--->
 
 ✅ **AWS Level**: Advanced - 300
 
@@ -31,9 +29,7 @@ This is the more advanced integration pattern — decoupled processing with sepa
 
 ## How The App Works
 
-<!-- TODO: Add architecture diagram
 ![diagram](./images/diagram.jpg)
--->
 
 ### Infrastructure
 
@@ -176,9 +172,7 @@ Edit WhatsApp configuration values in [AWS Secrets Manager](https://aws.amazon.c
 - `WHATS_PHONE_ID` — WhatsApp phone number ID from Meta Developer Console
 - `WHATS_TOKEN` — Meta Graph API access token
 
-<!-- TODO: Add Secrets Manager screenshot
 ![Secrets Manager](./images/secret.png)
--->
 
 ### Step 3: Webhook Configuration
 
@@ -189,9 +183,7 @@ Edit WhatsApp configuration values in [AWS Secrets Manager](https://aws.amazon.c
    - Set **Callback URL** to the Invoke URL.
    - Set **Verify token** to the same value as `WHATS_VERIFICATION_TOKEN`.
 
-<!-- TODO: Add webhook configuration screenshot
 ![Webhook Configuration](./images/webhook.png)
--->
 
 ### Step 4: Test
 

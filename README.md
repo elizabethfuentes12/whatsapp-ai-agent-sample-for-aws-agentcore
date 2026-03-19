@@ -2,7 +2,7 @@
 
 Two WhatsApp integration patterns using a shared **multimodal AI agent** deployed on [**Amazon Bedrock AgentCore Runtime**](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with [**Amazon Bedrock AgentCore Memory**](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). The agent processes text, images, audio, video, and documents — storing text-based understanding in memory since AgentCore Memory only accepts text content.
 
-> This demo uses [Strands Agents](https://github.com/strands-agents/sdk-python) with Amazon Bedrock AgentCore. Similar patterns can be applied with LangGraph, AutoGen, or other agent frameworks.
+> Amazon Bedrock AgentCore Memory only stores text. All multimedia (images, audio, video, documents) is first processed and understood by the agent, then the text understanding is stored in memory for future reference.
 
 > **Note**: This guide assumes familiarity with [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), [AWS Lambda](https://aws.amazon.com/lambda/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), and WhatsApp Business API concepts.
 

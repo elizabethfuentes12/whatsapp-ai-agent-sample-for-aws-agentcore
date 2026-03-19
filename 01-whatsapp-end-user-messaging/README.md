@@ -4,7 +4,6 @@ Process text, images, video, audio, and documents from WhatsApp using [AWS End U
 
 > Your data will be securely stored in your AWS account and will not be shared or used for model training. It is not recommended to share private information because the security of data with WhatsApp is not guaranteed.
 
-<!-- TODO: Add demo GIFs
 | Voice notes | Image |
 |----------|------------|
 |![Process Voice notes](./images/voice_note.gif)| ![Process image](./images/image_send.gif) |
@@ -12,7 +11,6 @@ Process text, images, video, audio, and documents from WhatsApp using [AWS End U
 | Video | Document |
 |--------------|--------------|
 |![Process Video](./images/video_send.gif)|![Process Documents](./images/documents.gif)|
--->
 
 ✅ **AWS Level**: Advanced - 300
 
@@ -29,9 +27,7 @@ Process text, images, video, audio, and documents from WhatsApp using [AWS End U
 
 ## How The App Works
 
-<!-- TODO: Add architecture diagram
 ![diagram](./images/diagram.jpg)
--->
 
 ### Infrastructure
 
