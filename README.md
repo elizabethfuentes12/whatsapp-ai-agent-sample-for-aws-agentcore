@@ -19,26 +19,6 @@ Two WhatsApp integration patterns using a shared **multimodal AI agent** deploye
 | [02-whatsapp-api-gateway](./02-whatsapp-api-gateway/) | WhatsApp via Meta Cloud API (Amazon API Gateway -> Amazon DynamoDB Stream -> AWS Lambda pipeline -> AgentCore) | ![Python](https://img.shields.io/badge/Python-3.12-blue) ![CDK](https://img.shields.io/badge/AWS-CDK-orange) ![APIGW](https://img.shields.io/badge/AWS-API_Gateway-purple) |
 | [notebook](./notebook/) | Jupyter notebook to test the deployed agent | ![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-orange) |
 
-## Architecture
-
-```
-                                    +---------------------------+
-                                    |  00-agent-agentcore       |
-                                    |  (AgentCore Runtime +     |
-                                    |   AgentCore Memory)       |
-                                    |  Exports ARN via SSM      |
-                                    +---------------------------+
-                                           ^            ^
-                                           |            |
-                        +------------------+            +------------------+
-                        |                                                  |
-              +---------+-----------+                        +-------------+---------+
-              | 01-end-user-msg     |                        | 02-api-gateway        |
-              | AWS End User Msg    |                        | Meta WhatsApp Cloud   |
-              | Amazon SNS -> Lambda|                        | API GW -> Lambda      |
-              +---------------------+                        +------------------------+
-```
-
 ## How Multimedia Memory Works
 
 [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) only stores **text**. When a user sends multimedia via WhatsApp:
