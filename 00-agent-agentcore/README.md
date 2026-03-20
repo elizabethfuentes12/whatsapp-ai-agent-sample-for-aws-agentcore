@@ -6,7 +6,7 @@ The agent processes text, images, documents, audio transcripts, and videos. Sinc
 
 ## Architecture
 
-![Architecture](./images/diagram.jpg)
+![Architecture](./images/diagram.svg)
 
 ## Key Files
 

@@ -27,7 +27,7 @@ Process text, images, video, audio, and documents from WhatsApp using [AWS End U
 
 ## How The App Works
 
-![Architecture](./images/diagram.jpg)
+![Architecture](./images/diagram.svg)
 
 ### Infrastructure
 

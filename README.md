@@ -8,7 +8,7 @@ Two WhatsApp integration patterns using a shared **multimodal AI agent** deploye
 
 ## Architecture
 
-![Architecture Overview](./images/diagram.jpg)
+![Architecture Overview](./images/diagram.svg)
 
 ## Projects
 

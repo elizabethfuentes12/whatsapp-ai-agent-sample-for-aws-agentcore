@@ -29,7 +29,7 @@ This integration pattern uses a 2-Lambda architecture with SQS-based message deb
 
 ## How The App Works
 
-![Architecture](./images/diagram.jpg)
+![Architecture](./images/diagram.svg)
 
 ### Infrastructure
 
