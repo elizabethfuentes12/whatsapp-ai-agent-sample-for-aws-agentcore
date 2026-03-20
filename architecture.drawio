@@ -1,0 +1,470 @@
+<mxfile host="app.diagrams.net" version="24.0.0">
+  <diagram name="Architecture Overview" id="overview">
+    <mxGraphModel dx="2400" dy="1600" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ============================================================ -->
+        <!-- DESCRIPTION TEXT BLOCK                                        -->
+        <!-- ============================================================ -->
+        <mxCell id="desc" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;WhatsApp AI Agent - Architecture Overview&lt;/h2&gt;&lt;p&gt;Three independent CDK stacks sharing configuration via AWS Systems Manager Parameter Store:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;b&gt;Stack 00&lt;/b&gt;: AgentCore Runtime + Memory with Strands multimodal agent, Claude Sonnet, and TwelveLabs video analysis.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Stack 01&lt;/b&gt;: WhatsApp via AWS End User Messaging Social - SNS triggers receiver Lambda, DynamoDB Stream tumbling window buffers messages, processor invokes AgentCore.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Stack 02&lt;/b&gt;: WhatsApp via Meta Cloud API - API Gateway webhook triggers receiver Lambda, same DynamoDB buffering pattern, processor invokes AgentCore.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Both Stack 01 and 02 use a &lt;b&gt;tumbling window&lt;/b&gt; (3s) to aggregate rapid-fire messages into a single agent invocation, reducing token usage and costs.&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;spacing=9;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="-180" width="1300" height="200" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- WHATSAPP USERS (outside region)                               -->
+        <!-- ============================================================ -->
+        <mxCell id="user" value="WhatsApp Users" style="dashed=0;outlineConnect=0;html=1;align=center;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;shape=mxgraph.weblogos.whatsapp;fillColor=#00E676;strokeColor=none;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="-30" y="340" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- TWELVELABS API (outside region, right side)                   -->
+        <!-- ============================================================ -->
+        <mxCell id="twelvelabs" value="TwelveLabs API&lt;div&gt;(External)&lt;/div&gt;" style="shape=image;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;imageAspect=0;image=https://vectorseek.com/wp-content/uploads/2025/12/TwelveLabs-Logo-PNG-SVG-Vecto-01.png;" vertex="1" parent="1">
+          <mxGeometry x="1520" y="500" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- AWS REGION CONTAINER                                          -->
+        <!-- ============================================================ -->
+        <mxCell id="region" value="AWS Region" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_region;strokeColor=#00A4A6;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="50" width="1340" height="830" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 01 BOX (blue) - top left                                -->
+        <!-- ============================================================ -->
+        <mxCell id="stack01_box" value="Stack 01: End User Messaging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#147EBA;strokeWidth=2;dashed=1;fontSize=14;fontStyle=1;fontColor=#147EBA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=5;container=0;" vertex="1" parent="region">
+          <mxGeometry x="20" y="30" width="720" height="330" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 02 BOX (purple) - bottom left                           -->
+        <!-- ============================================================ -->
+        <mxCell id="stack02_box" value="Stack 02: API Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#8C4FFF;strokeWidth=2;dashed=1;fontSize=14;fontStyle=1;fontColor=#8C4FFF;verticalAlign=top;align=left;spacingLeft=10;spacingTop=5;container=0;" vertex="1" parent="region">
+          <mxGeometry x="20" y="410" width="720" height="380" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 00 BOX (orange) - right side                            -->
+        <!-- ============================================================ -->
+        <mxCell id="stack00_box" value="Stack 00: AgentCore" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#FF8000;strokeWidth=2;dashed=1;fontSize=14;fontStyle=1;fontColor=#FF8000;verticalAlign=top;align=left;spacingLeft=10;spacingTop=5;container=0;" vertex="1" parent="region">
+          <mxGeometry x="790" y="30" width="520" height="760" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 01 ICONS (Row 1: EUM -> SNS -> Receiver -> DDB -> Stream -> Processor) -->
+        <!-- ============================================================ -->
+
+        <!-- End User Messaging -->
+        <mxCell id="eum" value="AWS End User&lt;div&gt;Messaging&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.end_user_messaging;" vertex="1" parent="region">
+          <mxGeometry x="40" y="85" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- SNS Topic (native shape, exception) -->
+        <mxCell id="sns01" value="Amazon SNS" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#E7157B;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.topic;" vertex="1" parent="region">
+          <mxGeometry x="155" y="89" width="60" height="52" as="geometry" />
+        </mxCell>
+
+        <!-- Receiver Lambda 01 -->
+        <mxCell id="receiver01" value="Lambda&lt;div&gt;Receiver&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="region">
+          <mxGeometry x="275" y="85" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- DynamoDB 01 -->
+        <mxCell id="ddb01" value="Amazon&lt;div&gt;DynamoDB&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#C925D1;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;" vertex="1" parent="region">
+          <mxGeometry x="395" y="85" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- DynamoDB Stream 01 -->
+        <mxCell id="stream01" value="DynamoDB&lt;div&gt;Stream&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#C925D1;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb_stream;" vertex="1" parent="region">
+          <mxGeometry x="515" y="85" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Processor Lambda 01 -->
+        <mxCell id="processor01" value="Lambda&lt;div&gt;Processor&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="region">
+          <mxGeometry x="635" y="85" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Stack 01 Row 2: S3 below Receiver, Transcribe below Processor -->
+        <mxCell id="s3_01" value="Amazon S3&lt;div&gt;Media&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#3F8624;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" vertex="1" parent="region">
+          <mxGeometry x="275" y="230" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="transcribe01" value="Amazon&lt;div&gt;Transcribe&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.transcribe;" vertex="1" parent="region">
+          <mxGeometry x="635" y="230" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 02 ICONS (Row 1: API GW -> Receiver -> DDB -> Stream -> Processor) -->
+        <!-- ============================================================ -->
+
+        <!-- API Gateway -->
+        <mxCell id="apigw" value="Amazon API&lt;div&gt;Gateway&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.api_gateway;" vertex="1" parent="region">
+          <mxGeometry x="40" y="465" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Receiver Lambda 02 -->
+        <mxCell id="receiver02" value="Lambda&lt;div&gt;Receiver&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="region">
+          <mxGeometry x="195" y="465" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- DynamoDB 02 -->
+        <mxCell id="ddb02" value="Amazon&lt;div&gt;DynamoDB&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#C925D1;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;" vertex="1" parent="region">
+          <mxGeometry x="355" y="465" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- DynamoDB Stream 02 -->
+        <mxCell id="stream02" value="DynamoDB&lt;div&gt;Stream&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#C925D1;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb_stream;" vertex="1" parent="region">
+          <mxGeometry x="475" y="465" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Processor Lambda 02 -->
+        <mxCell id="processor02" value="Lambda&lt;div&gt;Processor&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="region">
+          <mxGeometry x="635" y="465" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Stack 02 Row 2: Secrets below API GW, S3 below DDB, Transcribe below Processor -->
+        <mxCell id="secrets02" value="Secrets&lt;div&gt;Manager&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#DD344C;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.secrets_manager;" vertex="1" parent="region">
+          <mxGeometry x="40" y="620" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s3_02" value="Amazon S3&lt;div&gt;Media&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#3F8624;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" vertex="1" parent="region">
+          <mxGeometry x="355" y="620" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="transcribe02" value="Amazon&lt;div&gt;Transcribe&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.transcribe;" vertex="1" parent="region">
+          <mxGeometry x="635" y="620" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 00 ICONS                                                -->
+        <!-- ============================================================ -->
+
+        <!-- SSM Parameter Store (top) -->
+        <mxCell id="ssm" value="Parameter&lt;div&gt;Store&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.parameter_store;" vertex="1" parent="region">
+          <mxGeometry x="830" y="75" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- S3 Agent Code (below SSM) -->
+        <mxCell id="s3_agent" value="Amazon S3&lt;div&gt;Agent Code&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#3F8624;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" vertex="1" parent="region">
+          <mxGeometry x="830" y="230" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- AgentCore Runtime Endpoint (center) -->
+        <mxCell id="endpoint" value="AgentCore&lt;div&gt;Endpoint&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock_agentcore;" vertex="1" parent="region">
+          <mxGeometry x="930" y="400" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- AgentCore Runtime (right of Endpoint) -->
+        <mxCell id="runtime" value="AgentCore&lt;div&gt;Runtime&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock_agentcore;" vertex="1" parent="region">
+          <mxGeometry x="1100" y="400" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- AgentCore Memory (below Runtime) -->
+        <mxCell id="memory" value="AgentCore&lt;div&gt;Memory&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock_agentcore;" vertex="1" parent="region">
+          <mxGeometry x="1100" y="580" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Amazon Bedrock (top-right) -->
+        <mxCell id="bedrock" value="Amazon Bedrock&lt;div&gt;Claude Sonnet&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock;" vertex="1" parent="region">
+          <mxGeometry x="1200" y="230" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 01 MAIN FLOW EDGES                                      -->
+        <!-- ============================================================ -->
+
+        <!-- EUM -> SNS (green) -->
+        <mxCell id="e_eum_sns" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="eum" target="sns01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- SNS -> Receiver 01 (green) -->
+        <mxCell id="e_sns_r01" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="sns01" target="receiver01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Receiver 01 -> DDB 01 (green) -->
+        <mxCell id="e_r01_ddb01" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="receiver01" target="ddb01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- DDB 01 -> Stream 01 (red) -->
+        <mxCell id="e_ddb01_s01" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF0000;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="ddb01" target="stream01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Stream 01 -> Processor 01 (red) -->
+        <mxCell id="e_s01_p01" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF0000;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="stream01" target="processor01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Receiver 01 -> S3 01 (green, down) -->
+        <mxCell id="e_r01_s3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="receiver01" target="s3_01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Processor 01 -> Transcribe 01 (orange, down) -->
+        <mxCell id="e_p01_t01" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF8000;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="processor01" target="transcribe01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Processor 01 -> S3 01 (orange, down-left with waypoints) -->
+        <mxCell id="e_p01_s3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF8000;strokeWidth=2;flowAnimation=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="region" source="processor01" target="s3_01">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="665" y="190" />
+              <mxPoint x="390" y="190" />
+              <mxPoint x="390" y="260" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Processor 01 -> Endpoint (orange, right then down) -->
+        <mxCell id="e_p01_endpoint" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF8000;strokeWidth=2;flowAnimation=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="region" source="processor01" target="endpoint">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="760" y="115" />
+              <mxPoint x="760" y="415" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 02 MAIN FLOW EDGES                                      -->
+        <!-- ============================================================ -->
+
+        <!-- API GW -> Receiver 02 (green) -->
+        <mxCell id="e_apigw_r02" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="apigw" target="receiver02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Receiver 02 -> DDB 02 (green) -->
+        <mxCell id="e_r02_ddb02" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="receiver02" target="ddb02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- DDB 02 -> Stream 02 (red) -->
+        <mxCell id="e_ddb02_s02" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF0000;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="ddb02" target="stream02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Stream 02 -> Processor 02 (red) -->
+        <mxCell id="e_s02_p02" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF0000;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="stream02" target="processor02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Receiver 02 -> S3 02 (green, down-right with waypoints) -->
+        <mxCell id="e_r02_s302" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="region" source="receiver02" target="s3_02">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="225" y="570" />
+              <mxPoint x="300" y="570" />
+              <mxPoint x="300" y="650" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Receiver 02 -> Secrets 02 (dashed, down-left) -->
+        <mxCell id="e_r02_secrets" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;dashed=1;flowAnimation=1;strokeColor=#DD344C;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="region" source="receiver02" target="secrets02">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="195" y="560" />
+              <mxPoint x="70" y="560" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Processor 02 -> Transcribe 02 (orange, down) -->
+        <mxCell id="e_p02_t02" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF8000;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="processor02" target="transcribe02">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Processor 02 -> S3 02 (orange, down-left with waypoints) -->
+        <mxCell id="e_p02_s3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF8000;strokeWidth=2;flowAnimation=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="region" source="processor02" target="s3_02">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="665" y="575" />
+              <mxPoint x="470" y="575" />
+              <mxPoint x="470" y="650" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Processor 02 -> Endpoint (orange, right then up) -->
+        <mxCell id="e_p02_endpoint" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF8000;strokeWidth=2;flowAnimation=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="region" source="processor02" target="endpoint">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="760" y="495" />
+              <mxPoint x="760" y="445" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STACK 00 INTERNAL EDGES (teal)                                -->
+        <!-- ============================================================ -->
+
+        <!-- S3 Agent -> Endpoint (teal) -->
+        <mxCell id="e_s3_endpoint" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#01A88D;strokeWidth=2;flowAnimation=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="region" source="s3_agent" target="endpoint">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="860" y="350" />
+              <mxPoint x="930" y="350" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Endpoint -> Runtime (teal) -->
+        <mxCell id="e_endpoint_runtime" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#01A88D;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="endpoint" target="runtime">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Runtime -> Memory (teal) -->
+        <mxCell id="e_runtime_memory" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#01A88D;strokeWidth=2;flowAnimation=1;" edge="1" parent="region" source="runtime" target="memory">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Runtime -> Bedrock (teal, up-right) -->
+        <mxCell id="e_runtime_bedrock" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#01A88D;strokeWidth=2;flowAnimation=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="region" source="runtime" target="bedrock">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1230" y="415" />
+              <mxPoint x="1230" y="290" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Runtime -> TwelveLabs (teal, exits region) -->
+        <mxCell id="e_runtime_tl" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#01A88D;strokeWidth=2;flowAnimation=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;" edge="1" parent="1" source="runtime" target="twelvelabs">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1480" y="495" />
+              <mxPoint x="1480" y="530" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- SSM DASHED EXPORT EDGES                                       -->
+        <!-- ============================================================ -->
+
+        <!-- SSM -> Processor 01 (dashed, orange) -->
+        <mxCell id="e_ssm_p01" value="exports ARN" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;dashed=1;flowAnimation=1;strokeColor=#FF8000;fontColor=#FF8000;fontSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="region" source="ssm" target="processor01">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="780" y="105" />
+              <mxPoint x="780" y="55" />
+              <mxPoint x="665" y="55" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- SSM -> Processor 02 (dashed, purple) -->
+        <mxCell id="e_ssm_p02" value="exports ARN" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;dashed=1;flowAnimation=1;strokeColor=#8C4FFF;fontColor=#8C4FFF;fontSize=10;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="region" source="ssm" target="processor02">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="780" y="135" />
+              <mxPoint x="780" y="435" />
+              <mxPoint x="665" y="435" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- USER -> STACKS EDGES (outside region, parent="1")             -->
+        <!-- ============================================================ -->
+
+        <!-- User -> EUM (green, route up) -->
+        <mxCell id="e_user_eum" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="1" source="user" target="eum">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="70" y="370" />
+              <mxPoint x="70" y="165" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- User -> API GW (green, route down) -->
+        <mxCell id="e_user_apigw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="1" source="user" target="apigw">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="70" y="370" />
+              <mxPoint x="70" y="545" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- LEGEND (bottom)                                               -->
+        <!-- ============================================================ -->
+        <mxCell id="legend_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="920" width="1100" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend_title" value="Legend:" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="930" width="70" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Green line legend -->
+        <mxCell id="leg1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;endArrow=none;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="210" y="945" as="sourcePoint" />
+            <mxPoint x="270" y="945" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg1t" value="Raw messages" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="275" y="932" width="110" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- Red line legend -->
+        <mxCell id="leg2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#FF0000;strokeWidth=2;flowAnimation=1;endArrow=none;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="400" y="945" as="sourcePoint" />
+            <mxPoint x="460" y="945" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg2t" value="Buffered (tumbling window)" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="465" y="932" width="180" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- Orange line legend -->
+        <mxCell id="leg3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#FF8000;strokeWidth=2;flowAnimation=1;endArrow=none;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="660" y="945" as="sourcePoint" />
+            <mxPoint x="720" y="945" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg3t" value="Processed (AgentCore)" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="725" y="932" width="160" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- Teal line legend -->
+        <mxCell id="leg4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#01A88D;strokeWidth=2;flowAnimation=1;endArrow=none;endFill=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="900" y="945" as="sourcePoint" />
+            <mxPoint x="960" y="945" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg4t" value="AgentCore internal" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="965" y="932" width="140" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- Dashed line legend -->
+        <mxCell id="leg5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;dashed=1;flowAnimation=1;endArrow=none;endFill=0;strokeColor=#666666;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1110" y="945" as="sourcePoint" />
+            <mxPoint x="1170" y="945" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg5t" value="Config export" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="1175" y="932" width="100" height="25" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

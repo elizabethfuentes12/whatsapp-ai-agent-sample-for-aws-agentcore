@@ -6,26 +6,7 @@ The agent processes text, images, documents, audio transcripts, and videos. Sinc
 
 ## Architecture
 
-```
-                    +----------------------------------+
-                    |        AgentCore Runtime          |
-                    |  ┌─────────────────────────────┐  |
-                    |  │   Strands Multimodal Agent   │  |
-                    |  │   - Claude vision (images)   │  |
-                    |  │   - Claude docs (PDF/DOCX)   │  |
-                    |  │   - video_analysis tool       │  |
-                    |  │     (TwelveLabs Pegasus)      │  |
-                    |  └─────────────────────────────┘  |
-                    |  ┌─────────────────────────────┐  |
-                    |  │     AgentCore Memory         │  |
-                    |  │   - Short-term (per session) │  |
-                    |  │   - Long-term (per user)     │  |
-                    |  └─────────────────────────────┘  |
-                    +----------------------------------+
-                              ↑           ↑
-                         01-stack      02-stack
-                       (via SSM)     (via SSM)
-```
+![Architecture](./images/diagram.svg)
 
 ## Key Files
 

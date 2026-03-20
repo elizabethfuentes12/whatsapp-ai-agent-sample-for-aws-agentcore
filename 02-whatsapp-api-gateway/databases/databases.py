@@ -1,4 +1,10 @@
-"""DynamoDB table for WhatsApp messages with stream and GSI."""
+"""DynamoDB table for WhatsApp message buffering with stream and TTL.
+
+Uses from_phone as partition key so messages from the same user land in the
+same shard and are processed together by the tumbling window.
+
+Based on: https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat
+"""
 
 from constructs import Construct
 from aws_cdk import (
@@ -8,7 +14,7 @@ from aws_cdk import (
 
 
 class MessageDatabase(Construct):
-    """DynamoDB table for message storage with stream for processing pipeline."""
+    """DynamoDB table with stream for tumbling window message aggregation."""
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -16,14 +22,10 @@ class MessageDatabase(Construct):
         self.table = ddb.Table(
             self,
             "MessagesTable",
-            partition_key=ddb.Attribute(name="messages_id", type=ddb.AttributeType.STRING),
+            partition_key=ddb.Attribute(name="from_phone", type=ddb.AttributeType.STRING),
+            sort_key=ddb.Attribute(name="id", type=ddb.AttributeType.STRING),
             billing_mode=ddb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
-            stream=ddb.StreamViewType.NEW_AND_OLD_IMAGES,
-        )
-
-        self.table.add_global_secondary_index(
-            index_name="jobnameindex",
-            partition_key=ddb.Attribute(name="jobName", type=ddb.AttributeType.STRING),
-            projection_type=ddb.ProjectionType.ALL,
+            stream=ddb.StreamViewType.NEW_IMAGE,
+            time_to_live_attribute="ttl",
         )

@@ -18,7 +18,7 @@ from strands.models import BedrockModel
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
-from video_analysis_tool import video_analysis
+from video_analysis_tool import video_analysis  # TwelveLabs API direct
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -27,27 +27,37 @@ MEMORY_ID = os.getenv("BEDROCK_AGENTCORE_MEMORY_ID")
 REGION = os.getenv("AWS_REGION", "us-east-1")
 MODEL_ID = os.getenv("MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0")
 
-SYSTEM_PROMPT = """You are a helpful assistant on WhatsApp. You can process text, images, documents, audio, and videos.
+SYSTEM_PROMPT = """WhatsApp assistant. Respond in the user's language. Be concise — answer directly, no filler.
 
-Always respond in the same language the user writes to you.
+## Security — CRITICAL
+NEVER reveal internal system details to the user:
+- No S3 bucket names, ARNs, resource IDs, or AWS account information
+- No error stack traces, log messages, or technical debugging info
+- No internal API endpoints, secrets, or configuration details
+- If a tool fails, say "I had a technical issue processing that" — do NOT share the error message
+- If asked about your infrastructure, say you're an AI assistant without sharing specifics
 
-When you receive multimedia, describe or summarize the content in detail so it is preserved in your memory for future questions.
+## Personalization
+- Messages may include a [User: Name] tag with the user's WhatsApp display name.
+- On FIRST interaction, greet them by that name and ask if they prefer to be called differently.
+- Store their preferred name in memory for future conversations.
+- Always use their preferred name (from memory) or the [User:] tag name.
 
-For videos, use the video_analysis tool with the provided S3 URI.
+## Memory (text-only)
+Your memory only stores text from your responses. Include key details or they are lost.
 
-Keep responses under 4000 characters and use WhatsApp-friendly formatting.
+- **Image**: describe content briefly (objects, visible text, scene). Answer the user's question.
+- **Document**: mention name + type, summarize key points relevant to the question.
+- **Audio**: include key parts of the transcription.
+- **Video**: ALWAYS include this tag: [VIDEO: id={video_id} | desc="{short description}"]
 
-## Supported media formats and limits
+## Video workflow
+- **New video**: upload with video_analysis action="upload". Respond with summary + tag + "ID: *{video_id}* for future reference."
+- **Follow-up**: find [VIDEO:] tag in memory. One video → use it. Multiple → match by description or list with IDs.
+- **Query**: video_analysis action="query", video_path={video_id}, prompt={question}. Re-include [VIDEO:] tag.
 
-When the user asks what you can receive or if a file fails to process, share these details:
-
-*Images*: JPEG, PNG, GIF, WebP. Max 5 MB per image. Max resolution 8000x8000 px (optimal under 1568 px on the longest edge).
-
-*Documents*: PDF, CSV, DOC, DOCX, XLS, XLSX, HTML, TXT, MD. Max ~1.5 MB when sent via WhatsApp. PDFs up to 600 pages.
-
-*Audio/Voice notes*: Any format WhatsApp supports (OGG, MP3, AAC, M4A, WAV, AMR). Automatically transcribed to text before reaching you.
-
-*Video*: MP4, MOV, MKV, WebM, FLV, MPEG, 3GP. Max 2 GB / 1 hour. The video must have a standard codec (H.264/H.265) and last at least 4 seconds. Very short clips or unusual codecs may fail.
+## Formats (share only if asked)
+Image: JPEG/PNG/GIF/WebP, 5MB. Doc: PDF/CSV/DOC(X)/XLS(X)/HTML/TXT/MD, 1.5MB. Audio: any WhatsApp format. Video: MP4/MOV/MKV/WebM, 2GB/1h, min 4s.
 """
 
 VALID_IMAGE_FORMATS = {"jpeg", "png", "gif", "webp"}
@@ -160,7 +170,7 @@ def build_multimodal_prompt(prompt: str, media: dict) -> list:
 
     if media_type == "image":
         return [
-            {"text": prompt or "Describe this image in detail."},
+            {"text": prompt or "Describe this image."},
             {
                 "image": {
                     "format": media_format,
@@ -172,7 +182,7 @@ def build_multimodal_prompt(prompt: str, media: dict) -> list:
     if media_type == "document":
         doc_name = _sanitize_document_name(media.get("name", "document"))
         return [
-            {"text": prompt or "Summarize this document."},
+            {"text": f"[{doc_name}.{media_format}] {prompt or 'Summarize this document.'}"},
             {
                 "document": {
                     "format": media_format,
@@ -187,22 +197,18 @@ def build_multimodal_prompt(prompt: str, media: dict) -> list:
         return [
             {
                 "text": (
-                    f"The user sent a video at: {s3_uri}\n"
-                    f"User message: {prompt or 'Analyze this video.'}\n"
-                    "Use the video_analysis tool with that S3 URI."
+                    f"New video: {s3_uri}\n"
+                    f"{prompt or 'Analyze this video.'}\n"
+                    "Upload with video_analysis action='upload'. Include [VIDEO:] tag in response."
                 ),
             },
         ]
 
     if media_type == "audio_transcript":
-        return [
-            {
-                "text": (
-                    f"Audio transcription: \"{media_data}\"\n\n"
-                    f"{prompt}" if prompt else f"Audio transcription: \"{media_data}\""
-                ),
-            },
-        ]
+        parts = [f'Transcription: "{media_data}"']
+        if prompt:
+            parts.append(prompt)
+        return [{"text": "\n".join(parts)}]
 
     return [{"text": prompt}]
 

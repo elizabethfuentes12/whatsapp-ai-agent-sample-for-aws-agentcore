@@ -27,20 +27,23 @@ Process text, images, video, audio, and documents from WhatsApp using [AWS End U
 
 ## How The App Works
 
-![diagram](./images/diagram.jpg)
+![Architecture](./images/diagram.svg)
 
 ### Infrastructure
 
 The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to define and deploy the following resources:
 
 - [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - `whatsapp_handler`: Processes all incoming WhatsApp messages (text, image, audio, video, document), invokes the agent, and sends replies.
+  - `webhook_receiver`: Receives WhatsApp messages, downloads media to S3, saves to DynamoDB, and triggers debounce buffer.
+  - `message_processor`: Aggregates buffered messages, invokes the agent, and sends replies.
 
 - [Amazon Simple Storage Service (Amazon S3)](https://aws.amazon.com/s3/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - Bucket for storing media files, organized by type: `images/`, `voice/`, `video/`, `documents/`.
 
 - [Amazon DynamoDB](https://aws.amazon.com/dynamodb/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - `messages`: Stores WhatsApp message data for logging and deduplication.
+  - Message buffer with [DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) and tumbling window for message aggregation.
+  - Partition key `from_phone` ensures messages from the same user land in the same shard.
+  - TTL for automatic cleanup of processed messages.
 
 - [Amazon Simple Notification Service (Amazon SNS)](https://aws.amazon.com/sns/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - Topic for receiving WhatsApp events from AWS End User Messaging Social.
@@ -59,15 +62,48 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
 
 1. User sends a WhatsApp message.
 2. Message is received by AWS End User Messaging Social and published to the Amazon SNS Topic.
-3. `whatsapp_handler` AWS Lambda function is triggered.
-4. Message is processed based on its type:
-   - **Text**: Sent directly to Amazon Bedrock AgentCore Runtime.
-   - **Audio**: Transcribed using [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), then the transcript is sent as text to the agent.
-   - **Image**: Downloaded to S3 (`images/`), base64-encoded, sent as inline content block to the agent (Claude vision).
-   - **Video**: Downloaded to S3 (`video/`), S3 URI sent to the agent which uses the `video_analysis` tool ([TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) via [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)).
-   - **Document**: Downloaded to S3 (`documents/`), base64-encoded, sent as inline document block to the agent.
-5. Amazon Bedrock AgentCore Runtime processes the message with [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) context.
-6. Response is sent back to the user via WhatsApp.
+3. `webhook_receiver` Lambda is triggered: marks as read, sends reaction, downloads media to S3, saves to DynamoDB (`PENDING`).
+4. Debounce buffer: an atomic counter is incremented and an SQS message is sent with `DelaySeconds=3`.
+5. After 3 seconds of inactivity, `message_processor` Lambda fires:
+   - Checks if its counter matches the current value (skips if a newer message arrived).
+   - Queries all `PENDING` messages for the phone number.
+   - Aggregates text messages (joined with newlines) and selects the last media item.
+   - Processes media based on type:
+     - **Text**: Sent directly to Amazon Bedrock AgentCore Runtime.
+     - **Audio**: Transcribed using [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), then the transcript is sent as text to the agent.
+     - **Image**: Downloaded from S3, base64-encoded, sent as inline content block to the agent (Claude vision).
+     - **Video**: S3 URI sent to the agent which uses the `video_analysis` tool ([TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) via [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)).
+     - **Document**: Downloaded from S3, base64-encoded, sent as inline document block to the agent.
+6. Amazon Bedrock AgentCore Runtime processes the aggregated message with [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) context.
+7. Response is sent back to the user via WhatsApp.
+
+### Message Buffering (Tumbling Window)
+
+When users send multiple messages in quick succession (common in WhatsApp), the tumbling window accumulates them into a single agent invocation. This reduces token usage and AgentCore Runtime costs.
+
+**How it works:**
+
+1. Each incoming message is saved to DynamoDB with `from_phone` as partition key.
+2. DynamoDB Streams captures the INSERT event.
+3. The Lambda event source mapping uses a **tumbling window** (`tumbling_window` + `max_batching_window`) to accumulate records for N seconds before invoking the processor.
+4. Since all messages from the same phone share the same partition key, they land in the same shard and are processed together.
+5. The processor groups by sender, concatenates text messages with newlines, and invokes AgentCore once per sender.
+
+```
+User sends 3 messages in 2 seconds:
+  "hola"           -> DDB INSERT (t=0s)
+  "tengo una duda" -> DDB INSERT (t=1s)
+  "sobre mi video" -> DDB INSERT (t=2s)
+
+Tumbling window fires at t=3s:
+  -> Processor receives all 3 records in one batch
+  -> Aggregates: "hola\ntengo una duda\nsobre mi video"
+  -> Single AgentCore invocation
+```
+
+The buffer duration is configurable in the CDK construct (default: 3 seconds).
+
+> This buffering technique is based on [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat), which demonstrates DynamoDB Streams with tumbling windows for WhatsApp message aggregation. That project reports reducing ~1,000 raw messages to ~250 aggregated messages (4:1 ratio), yielding approximately 75% cost savings on downstream processing. In our case, the savings apply to AgentCore Runtime invocations and LLM token usage.
 
 ### S3 Media Organization
 

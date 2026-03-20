@@ -214,3 +214,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .claude/*.mp4
+
+# Heavy media files
+*.mp4
+images/blog-cover*.png
+images/social-flow-diagram*.png

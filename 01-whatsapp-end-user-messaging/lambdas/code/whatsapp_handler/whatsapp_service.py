@@ -18,7 +18,7 @@ DOCUMENT_PREFIX = os.environ.get("DOCUMENT_PREFIX", "document_")
 class WhatsAppMessage:
     """Represents a single WhatsApp message."""
 
-    def __init__(self, meta_phone_number, message, metadata=None, client=None, meta_api_version="v20.0"):
+    def __init__(self, meta_phone_number, message, metadata=None, client=None, meta_api_version="v20.0", contact_name=""):
         self.meta_phone_number = meta_phone_number
         self.phone_number_arn = meta_phone_number.get("arn", "")
         # phone-number-id-976c72a700aac43eaf573ae050example
@@ -30,6 +30,7 @@ class WhatsAppMessage:
         self.phone_number = message.get("from", "")
         self.meta_api_version = meta_api_version
         self.message_id = message.get("id", "")
+        self.contact_name = contact_name
 
     def get_text(self) -> str:
         return self.message.get("text", {}).get("body", "")
@@ -206,9 +207,11 @@ class WhatsAppService:
             metadata = value.get("metadata", {})
             phone_number_id = metadata.get("phone_number_id", "")
             phone_number = self._get_phone_number_arn(phone_number_id)
+            contacts = value.get("contacts", [])
+            contact_name = contacts[0].get("profile", {}).get("name", "") if contacts else ""
             for message in value.get("messages", []):
                 self.messages.append(
-                    WhatsAppMessage(phone_number, message, metadata)
+                    WhatsAppMessage(phone_number, message, metadata, contact_name=contact_name)
                 )
 
     def _get_phone_number_arn(self, phone_number_id: str) -> dict:

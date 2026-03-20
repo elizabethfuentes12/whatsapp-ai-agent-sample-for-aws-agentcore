@@ -67,3 +67,4 @@ class WhatsAppEndUserMessagingStack(Stack):
         CfnOutput(self, "WhatsAppTopicArn", value=sns_topic.topic.topic_arn)
         CfnOutput(self, "S3BucketName", value=bucket.bucket_name)
         CfnOutput(self, "LambdaFunctionName", value=lambdas.whatsapp_handler.function_name)
+        CfnOutput(self, "ProcessorFunctionName", value=lambdas.message_processor.function_name)

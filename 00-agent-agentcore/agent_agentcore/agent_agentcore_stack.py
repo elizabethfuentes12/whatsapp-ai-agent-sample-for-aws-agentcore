@@ -12,8 +12,11 @@ from aws_cdk import (
     Stack,
     CfnOutput,
     RemovalPolicy,
+    SecretValue,
     aws_bedrockagentcore as bedrockagentcore,
+    aws_iam as iam,
     aws_s3 as s3,
+    aws_secretsmanager as secretsmanager,
     aws_ssm as ssm,
 )
 from constructs import Construct
@@ -33,6 +36,16 @@ class AgentAgentCoreStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # --- Secrets Manager for TwelveLabs API key ---
+        tl_secret = secretsmanager.Secret(
+            self,
+            "TwelveLabsApiKey",
+            secret_object_value={
+                "TL_API_KEY": SecretValue.unsafe_plain_text("CHANGE_ME"),
+            },
+            description="TwelveLabs API key for video analysis",
+        )
+
         # --- S3 Bucket for agent code and media ---
         bucket = s3.Bucket(
             self,
@@ -50,6 +63,7 @@ class AgentAgentCoreStack(Stack):
         # --- AgentCore Runtime ---
         agentcore_role = AgentCoreRole(self, "AgentCoreRole")
         bucket.grant_read_write(agentcore_role.role)
+        tl_secret.grant_read(agentcore_role.role)
 
         agentcore = AgentCoreDeployment(
             self,
@@ -60,6 +74,7 @@ class AgentAgentCoreStack(Stack):
             environment_variables={
                 "AWS_REGION": REGION,
                 "MODEL_ID": MODEL_ID,
+                "TL_SECRET_ARN": tl_secret.secret_arn,
             },
         )
 
@@ -108,3 +123,4 @@ class AgentAgentCoreStack(Stack):
         CfnOutput(self, "EndpointArn", value=endpoint.attr_agent_runtime_endpoint_arn)
         CfnOutput(self, "MemoryId", value=memory.memory_id)
         CfnOutput(self, "S3BucketName", value=bucket.bucket_name)
+        CfnOutput(self, "TwelveLabsSecretArn", value=tl_secret.secret_arn)

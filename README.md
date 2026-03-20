@@ -6,6 +6,10 @@ Two WhatsApp integration patterns using a shared **multimodal AI agent** deploye
 
 > **Note**: This guide assumes familiarity with [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), [AWS Lambda](https://aws.amazon.com/lambda/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), and WhatsApp Business API concepts.
 
+## Architecture
+
+![Architecture Overview](./images/diagram.svg)
+
 ## Projects
 
 | Project | Description | Stack |

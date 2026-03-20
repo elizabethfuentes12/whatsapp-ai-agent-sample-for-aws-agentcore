@@ -65,7 +65,7 @@ class WhatsAppApiGatewayStack(Stack):
         )
         bucket.grant_read(agentcore_role)
 
-        # --- DynamoDB with stream ---
+        # --- DynamoDB ---
         db = MessageDatabase(self, "Database")
 
         # --- Lambda Layers ---
@@ -83,10 +83,12 @@ class WhatsAppApiGatewayStack(Stack):
         )
 
         # --- API Gateway ---
-        api = WebhookApi(self, "API", whatsapp_in_fn=lambdas.whatsapp_in)
+        api = WebhookApi(self, "API", whatsapp_in_fn=lambdas.webhook_receiver)
 
         # --- Outputs ---
         CfnOutput(self, "AgentRuntimeArn", value=AGENT_RUNTIME_ARN)
         CfnOutput(self, "MessagesTableName", value=db.table.table_name)
         CfnOutput(self, "S3BucketName", value=bucket.bucket_name)
         CfnOutput(self, "SecretArn", value=secrets.secret_arn)
+        CfnOutput(self, "WebhookReceiverName", value=lambdas.webhook_receiver.function_name)
+        CfnOutput(self, "ProcessorName", value=lambdas.message_processor.function_name)

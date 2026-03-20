@@ -2,7 +2,7 @@
 
 Process text, images, video, audio, and documents from WhatsApp using the [Meta WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) directly with [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), a 6-function [AWS Lambda](https://aws.amazon.com/lambda/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) pipeline, and [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) for persistent conversation context.
 
-This is the more advanced integration pattern — decoupled processing with separate functions for ingestion, routing, transcription, agent invocation, and reply delivery.
+This integration pattern uses a 2-Lambda architecture with SQS-based message debouncing to aggregate rapid-fire messages into a single agent invocation, reducing token usage and costs.
 
 > Your data will be securely stored in your AWS account and will not be shared or used for model training. It is not recommended to share private information because the security of data with WhatsApp is not guaranteed.
 
@@ -29,25 +29,23 @@ This is the more advanced integration pattern — decoupled processing with sepa
 
 ## How The App Works
 
-![diagram](./images/diagram.jpg)
+![Architecture](./images/diagram.svg)
 
 ### Infrastructure
 
 The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to define and deploy the following resources:
 
 - [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - `whatsapp_in`: Webhook receiver — validates and stores messages in Amazon DynamoDB.
-  - `process_stream`: [Amazon DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) consumer — routes by message type.
-  - `agent_processor`: Invokes Amazon Bedrock AgentCore Runtime with text/multimodal payloads.
-  - `audio_transcriptor`: Starts [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) jobs on audio messages.
-  - `transcriber_done`: Triggered by Amazon S3 event when transcription completes.
-  - `whatsapp_out`: Sends replies back via Meta Graph API.
+  - `webhook_receiver`: Validates webhook, downloads media to S3, saves to DynamoDB, and triggers debounce buffer.
+  - `message_processor`: Aggregates buffered messages, invokes agent, transcribes audio, and sends replies via Meta Graph API.
 
 - [Amazon Simple Storage Service (Amazon S3)](https://aws.amazon.com/s3/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - Bucket for storing media files and transcription outputs.
 
 - [Amazon DynamoDB](https://aws.amazon.com/dynamodb/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - Message store with DynamoDB Streams enabled for event-driven processing.
+  - Message buffer with [DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) and tumbling window for message aggregation.
+  - Partition key `from_phone` ensures messages from the same user land in the same shard.
+  - TTL for automatic cleanup of processed messages.
 
 - [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - REST API with `/webhook` endpoint (POST for messages, GET for verification).
@@ -60,32 +58,49 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
   - Memory for persistent conversation context (short-term + long-term).
 
 - [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - Used for transcribing audio/voice messages.
+  - Used for transcribing audio/voice messages (synchronous polling in the processor Lambda).
 
 ### Data Flow
 
-#### 1 - Message Input
-
 1. User sends a WhatsApp message.
-2. [Meta WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) forwards the message to [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) webhook (previously authenticated).
-3. The `whatsapp_in` AWS Lambda function validates and stores the message in [Amazon DynamoDB](https://aws.amazon.com/dynamodb/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
-4. The [Amazon DynamoDB Stream](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) triggers the `process_stream` AWS Lambda function.
+2. [Meta WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) forwards the message to [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) webhook.
+3. `webhook_receiver` Lambda validates, downloads media to S3, saves to DynamoDB (`PENDING`), and sends a delayed SQS message.
+4. Debounce: each new message increments an atomic counter. After 3 seconds of inactivity, `message_processor` fires.
+5. `message_processor` checks the counter, queries all `PENDING` messages for the phone, and aggregates them:
+   - **Text**: Messages joined with newlines into a single prompt.
+   - **Image/Document**: Downloaded from S3, base64-encoded, sent as inline content block to the agent.
+   - **Video**: S3 URI sent to the agent which uses the `video_analysis` tool ([TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) via [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)).
+   - **Audio**: Transcribed synchronously using [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), then sent as text to the agent.
+6. [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) processes the aggregated message with memory context.
+7. Response is sent back to the user via Meta Graph API.
 
-#### 2 - Message Processing
+### Message Buffering (Tumbling Window)
 
-**Text Message:**
-`process_stream` sends the text directly to the `agent_processor` AWS Lambda function, which invokes [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
+When users send multiple messages in quick succession (common in WhatsApp), the tumbling window accumulates them into a single agent invocation. This reduces token usage and AgentCore Runtime costs.
 
-**Image/Document Message:**
-`process_stream` downloads the media from Meta Graph API, uploads to [Amazon S3](https://aws.amazon.com/s3/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), base64-encodes it, and sends as inline content block to `agent_processor`.
+**How it works:**
 
-**Video Message:**
-`process_stream` downloads the video to Amazon S3 and sends the S3 URI to `agent_processor`. The agent uses the `video_analysis` tool ([TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) via [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)).
+1. Each incoming message is saved to DynamoDB with `from_phone` as partition key.
+2. DynamoDB Streams captures the INSERT event.
+3. The Lambda event source mapping uses a **tumbling window** (`tumbling_window` + `max_batching_window`) to accumulate records for N seconds before invoking the processor.
+4. Since all messages from the same phone share the same partition key, they land in the same shard and are processed together.
+5. The processor groups by sender, concatenates text messages with newlines, and invokes AgentCore once per sender.
 
-**Voice/Audio Message:**
-1. `audio_transcriptor` downloads the audio to Amazon S3 and starts an [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) job.
-2. When the transcription completes, an Amazon S3 event triggers `transcriber_done`.
-3. `transcriber_done` reads the transcript and sends it as text to `agent_processor`.
+```
+User sends 3 messages in 2 seconds:
+  "hola"           -> DDB INSERT (t=0s)
+  "tengo una duda" -> DDB INSERT (t=1s)
+  "sobre mi video" -> DDB INSERT (t=2s)
+
+Tumbling window fires at t=3s:
+  -> Processor receives all 3 records in one batch
+  -> Aggregates: "hola\ntengo una duda\nsobre mi video"
+  -> Single AgentCore invocation
+```
+
+The buffer duration is configurable in the CDK construct (default: 3 seconds).
+
+> This buffering technique is based on [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat), which demonstrates DynamoDB Streams with tumbling windows for WhatsApp message aggregation. That project reports reducing ~1,000 raw messages to ~250 aggregated messages (4:1 ratio), yielding approximately 75% cost savings on downstream processing. In our case, the savings apply to AgentCore Runtime invocations and LLM token usage.
 
 #### 3 - Agent Processing
 
