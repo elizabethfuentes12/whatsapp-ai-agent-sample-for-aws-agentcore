@@ -37,6 +37,3 @@ def build_response(status_code: int, body) -> dict:
     }
 
 
-def normalize_phone(phone: str) -> str:
-    """Normalize phone number for WhatsApp API."""
-    return phone.replace("+", "").strip()

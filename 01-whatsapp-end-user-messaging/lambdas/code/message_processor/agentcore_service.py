@@ -40,7 +40,6 @@ class AgentCoreService:
     def invoke_agent(
         self,
         from_phone: str,
-        business_phone_id: str,
         prompt: str,
         media: dict = None,
     ) -> str:
@@ -48,7 +47,6 @@ class AgentCoreService:
 
         Args:
             from_phone: Sender's phone number.
-            business_phone_id: Business phone number ID.
             prompt: Text prompt from the user.
             media: Optional dict with keys 'type', 'format', 'data'.
 

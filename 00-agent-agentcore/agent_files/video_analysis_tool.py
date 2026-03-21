@@ -102,9 +102,9 @@ def video_analysis(
     - list_videos: List all indexed videos with their IDs.
 
     Args:
-        action: Operation to perform (upload, youtube, query, list_videos).
-        video_path: S3 URI or URL for upload; YouTube URL for youtube; video_id for query.
-        video_name: Human-readable name for the video (upload/youtube only).
+        action: Operation to perform (upload, query, list_videos).
+        video_path: S3 URI or URL for upload; video_id for query.
+        video_name: Human-readable name for the video (upload only).
         prompt: Question about the video content (query only).
         index_name: TwelveLabs index name.
         temperature: Model temperature for query responses.
@@ -128,7 +128,7 @@ def video_analysis(
         else:
             return {
                 "status": "error",
-                "content": [{"text": f"Invalid action: {action}. Use upload, youtube, query, or list_videos."}],
+                "content": [{"text": f"Invalid action: {action}. Use upload, query, or list_videos."}],
             }
     except Exception as e:
         logger.error("video_analysis failed: action=%s, error=%s", action, str(e), exc_info=True)

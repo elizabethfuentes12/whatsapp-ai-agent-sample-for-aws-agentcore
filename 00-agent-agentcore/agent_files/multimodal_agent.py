@@ -19,7 +19,6 @@ from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemory
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
 from video_analysis_tool import video_analysis  # TwelveLabs API direct
-from youtube_download_tool import youtube_download  # YouTube → S3
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -54,7 +53,6 @@ Your memory only stores text from your responses. Include key details or they ar
 
 ## Video workflow
 - **New video (WhatsApp)**: video_analysis action="upload", video_path={s3_uri}. Respond with summary + tag + "ID: *{video_id}*."
-- **YouTube link**: first youtube_download(url) to get s3_uri, then video_analysis action="upload", video_path={s3_uri}. Two steps.
 - **Follow-up**: find [VIDEO:] tag in memory. One video → use it. Multiple → match by description or list with IDs.
 - **Query**: video_analysis action="query", video_path={video_id}, prompt={question}. Re-include [VIDEO:] tag.
 
@@ -111,7 +109,7 @@ def get_or_create_agent(actor_id: str, session_id: str) -> Agent:
     _agent = Agent(
         model=BedrockModel(model_id=MODEL_ID),
         system_prompt=SYSTEM_PROMPT,
-        tools=[video_analysis, youtube_download],
+        tools=[video_analysis],
         session_manager=session_manager,
     )
     _current_session = session_id

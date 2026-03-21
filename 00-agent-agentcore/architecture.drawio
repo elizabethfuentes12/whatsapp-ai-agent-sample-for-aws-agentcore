@@ -38,7 +38,7 @@
         </mxCell>
         <!-- ROW 3: Strands box (y=400) - far below Row 2 labels -->
         <mxCell id="strands_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;opacity=30;arcSize=10;" vertex="1" parent="region">
-          <mxGeometry x="200" y="400" width="560" height="80" as="geometry" />
+          <mxGeometry x="200" y="400" width="420" height="80" as="geometry" />
         </mxCell>
         <mxCell id="strands_logo" value="" style="shape=image;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;aspect=fixed;imageAspect=0;image=https://strandsagents.com/latest/assets/logo-github.svg;" vertex="1" parent="region">
           <mxGeometry x="220" y="403" width="30" height="30" as="geometry" />
@@ -51,14 +51,6 @@
         </mxCell>
         <mxCell id="video_tool" value="video_analysis tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;fontStyle=0;" vertex="1" parent="region">
           <mxGeometry x="400" y="438" width="160" height="30" as="geometry" />
-        </mxCell>
-        <!-- YouTube tool in Strands box -->
-        <mxCell id="yt_tool" value="youtube_download tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;fontStyle=0;" vertex="1" parent="region">
-          <mxGeometry x="580" y="438" width="160" height="30" as="geometry" />
-        </mxCell>
-        <!-- YouTube icon OUTSIDE region -->
-        <mxCell id="youtube" value="YouTube" style="shape=image;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;imageAspect=0;image=https://cdn.simpleicons.org/youtube/FF0000;" vertex="1" parent="1">
-          <mxGeometry x="960" y="300" width="60" height="60" as="geometry" />
         </mxCell>
         <!-- ROW 4: SSM (y=580) -->
         <mxCell id="ssm" value="SSM&lt;br&gt;Parameter Store" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.parameter_store;" vertex="1" parent="region">
@@ -108,16 +100,6 @@
               <mxPoint x="520" y="530" />
               <mxPoint x="900" y="530" />
               <mxPoint x="900" y="580" />
-            </Array>
-          </mxGeometry>
-        </mxCell>
-        <!-- yt_tool → YouTube (download, route below strands then right) -->
-        <mxCell id="e_yt" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#FF0000;strokeWidth=2;flowAnimation=1;" edge="1" parent="1" source="yt_tool" target="youtube">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="700" y="490" />
-              <mxPoint x="900" y="490" />
-              <mxPoint x="900" y="330" />
             </Array>
           </mxGeometry>
         </mxCell>

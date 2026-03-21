@@ -8,7 +8,6 @@ Aggregation pattern based on:
 https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat
 """
 
-import base64
 import json
 import logging
 import os
@@ -24,7 +23,6 @@ from media_utils import get_s3_as_base64
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-TABLE_NAME = os.environ.get("TABLE_NAME", "")
 AGENT_ARN = os.environ.get("AGENT_ARN", "")
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 

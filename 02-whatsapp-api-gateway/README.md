@@ -51,7 +51,7 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
   - REST API with `/webhook` endpoint (POST for messages, GET for verification).
 
 - [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - Stores WhatsApp credentials (verification token, phone ID, Meta API token).
+  - Stores WhatsApp credentials (verification token, API token, display phone number for filtering).
 
 - [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - Runtime invocation for processing all message types with multimodal Strands agent.
@@ -183,9 +183,17 @@ This stack depends on the Amazon Bedrock AgentCore Runtime deployed in `00-agent
 
 Edit WhatsApp configuration values in [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) [console](https://console.aws.amazon.com/secretsmanager/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
 
-- `WHATS_VERIFICATION_TOKEN` — webhook verification token (any value, must match Step 3)
-- `WHATS_PHONE_ID` — WhatsApp phone number ID from Meta Developer Console
-- `WHATS_TOKEN` — Meta Graph API access token
+| Secret Key | Description | Where to find it |
+|---|---|---|
+| `WHATS_VERIFICATION_TOKEN` | Webhook verification token. You choose any value — must match the "Verify token" field in Meta webhook configuration (Step 3). | You define it |
+| `WHATS_TOKEN` | Permanent Meta Graph API access token for sending messages. | [Meta Developer Console](https://developers.facebook.com/) → Your App → WhatsApp → API Setup → "Generate permanent token" |
+| `DISPLAY_PHONE_NUMBER` | WhatsApp Business phone number (with country code, no `+`). Only messages to this number are processed. | [Meta Developer Console](https://developers.facebook.com/) → Your App → WhatsApp → API Setup → "Phone number" (e.g., `1234567890`) |
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id <SecretArn from stack output> \
+  --secret-string '{"WHATS_VERIFICATION_TOKEN":"your-verify-token","WHATS_TOKEN":"EAAxxxxxxx","DISPLAY_PHONE_NUMBER":"your-phone-number"}'
+```
 
 ![Secrets Manager](./images/secret.png)
 

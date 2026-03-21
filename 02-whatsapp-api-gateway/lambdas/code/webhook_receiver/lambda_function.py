@@ -25,7 +25,6 @@ logger.setLevel(logging.INFO)
 TABLE_NAME = os.environ.get("TABLE_NAME", "")
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 SECRET_ARN = os.environ.get("SECRET_ARN", "")
-DISPLAY_PHONE_NUMBER = os.environ.get("DISPLAY_PHONE_NUMBER", "")
 
 dynamodb = boto3.resource("dynamodb")
 table = dynamodb.Table(TABLE_NAME) if TABLE_NAME else None
@@ -59,6 +58,7 @@ def lambda_handler(event, context):
     # POST: Message reception
     body = json.loads(event.get("body", "{}"))
     whats_token = "Bearer " + secrets["WHATS_TOKEN"]
+    valid_phone = secrets.get("DISPLAY_PHONE_NUMBER", "")
 
     for entry in body.get("entry", []):
         changes = entry.get("changes", [])
@@ -74,7 +74,7 @@ def lambda_handler(event, context):
         display_phone = metadata.get("display_phone_number", "")
         phone_id = metadata.get("phone_number_id", "")
 
-        if DISPLAY_PHONE_NUMBER and display_phone != DISPLAY_PHONE_NUMBER:
+        if valid_phone and display_phone != valid_phone:
             logger.info("Ignoring message for phone: %s", display_phone)
             continue
 

@@ -50,7 +50,6 @@ class ProjectLambdas(Construct):
             environment={
                 **default_env,
                 "SECRET_ARN": secret_arn,
-                "DISPLAY_PHONE_NUMBER": "",
             },
         )
 

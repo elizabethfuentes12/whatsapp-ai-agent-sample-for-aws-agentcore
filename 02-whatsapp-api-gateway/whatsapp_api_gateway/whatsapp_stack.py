@@ -39,11 +39,11 @@ class WhatsAppApiGatewayStack(Stack):
                 "WHATS_VERIFICATION_TOKEN": SecretValue.unsafe_plain_text(
                     "CHANGE_ME_VERIFICATION_TOKEN"
                 ),
-                "WHATS_PHONE_ID": SecretValue.unsafe_plain_text(
-                    "CHANGE_ME_PHONE_ID"
-                ),
                 "WHATS_TOKEN": SecretValue.unsafe_plain_text(
                     "CHANGE_ME_TOKEN"
+                ),
+                "DISPLAY_PHONE_NUMBER": SecretValue.unsafe_plain_text(
+                    "CHANGE_ME_PHONE_NUMBER"
                 ),
             },
         )

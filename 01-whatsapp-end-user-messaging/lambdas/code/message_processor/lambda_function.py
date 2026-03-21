@@ -23,7 +23,6 @@ from agentcore_service import AgentCoreService
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-TABLE_NAME = os.environ.get("TABLE_NAME", "")
 AGENT_ARN = os.environ.get("AGENT_ARN", "")
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 
@@ -127,7 +126,7 @@ def _process_sender(phone, messages):
             b64_data, img_format = _get_s3_as_base64(media["s3_url"])
             if b64_data:
                 response_text = agentcore.invoke_agent(
-                    phone, phone_number_id,
+                    phone,
                     combined_text or "Analyze this image in detail.",
                     media={"type": "image", "format": img_format, "data": b64_data},
                 )
@@ -139,12 +138,12 @@ def _process_sender(phone, messages):
                 full_prompt = f'Audio transcription: "{transcript}"'
                 if combined_text:
                     full_prompt += f"\n{combined_text}"
-                response_text = agentcore.invoke_agent(phone, phone_number_id, full_prompt)
+                response_text = agentcore.invoke_agent(phone, full_prompt)
 
         elif media_type == "video":
             prompt = combined_text or "Analyze this video in detail."
             response_text = agentcore.invoke_agent(
-                phone, phone_number_id, prompt,
+                phone, prompt,
                 media={"type": "video", "s3_uri": media["s3_url"]},
             )
 
@@ -152,7 +151,7 @@ def _process_sender(phone, messages):
             b64_data, doc_format = _get_s3_as_base64(media["s3_url"])
             if b64_data:
                 response_text = agentcore.invoke_agent(
-                    phone, phone_number_id,
+                    phone,
                     combined_text or "Analyze this document.",
                     media={
                         "type": "document", "format": doc_format,
@@ -161,7 +160,7 @@ def _process_sender(phone, messages):
                 )
     else:
         if combined_text:
-            response_text = agentcore.invoke_agent(phone, phone_number_id, combined_text)
+            response_text = agentcore.invoke_agent(phone, combined_text)
 
     if transcript_text:
         _send_reply(phone_number_id, meta_api_version, phone, last_message_id, transcript_text)

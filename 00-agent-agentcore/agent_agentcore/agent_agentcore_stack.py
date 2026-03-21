@@ -7,14 +7,12 @@ integration stacks can consume them.
 
 import os
 
-import aws_cdk as cdk
 from aws_cdk import (
     Stack,
     CfnOutput,
     RemovalPolicy,
     SecretValue,
     aws_bedrockagentcore as bedrockagentcore,
-    aws_iam as iam,
     aws_s3 as s3,
     aws_secretsmanager as secretsmanager,
     aws_ssm as ssm,
@@ -75,7 +73,6 @@ class AgentAgentCoreStack(Stack):
                 "AWS_REGION": REGION,
                 "MODEL_ID": MODEL_ID,
                 "TL_SECRET_ARN": tl_secret.secret_arn,
-                "S3_BUCKET": bucket.bucket_name,
             },
         )
 

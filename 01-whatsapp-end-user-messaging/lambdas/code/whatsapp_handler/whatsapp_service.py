@@ -170,24 +170,6 @@ class WhatsAppMessage:
         except Exception as e:
             logger.error("Failed to send reaction: %s", str(e))
 
-    def save(self, table):
-        """Save message to DynamoDB."""
-        try:
-            item = {
-                "id": self.message_id,
-                "from": self.phone_number,
-                "phone_number_id": self.phone_number_id,
-                "type": self.get_message_type(),
-                "timestamp": self.message.get("timestamp", ""),
-            }
-            text = self.get_text()
-            if text:
-                item["text"] = text
-            table.put_item(Item=item)
-        except Exception as e:
-            logger.error("Failed to save message: %s", str(e))
-
-
 class WhatsAppService:
     """Parses SNS events from AWS End User Messaging Social."""
 
