@@ -256,4 +256,11 @@ This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE) fil
 
 ## Connect with me
 
-🇻🇪 [Dev.to](https://dev.to/elizabethfuentes12) | [LinkedIn](https://www.linkedin.com/in/lizfue/) | [GitHub](https://github.com/elizabethfuentes12/) | [Twitter](https://twitter.com/elizabethfue12) | [Instagram](https://www.instagram.com/elifue.tech) | [YouTube](https://www.youtube.com/channel/UCr0Gnc-t30m4xyrvsQpNp2Q)
+🇻🇪
+
+[![Dev.to](https://img.shields.io/badge/Dev.to-@elizabethfuentes12-0A0A0A?style=for-the-badge&logo=dev.to&logoColor=white)](https://dev.to/elizabethfuentes12)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-lizfue-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/lizfue/)
+[![GitHub](https://img.shields.io/badge/GitHub-elizabethfuentes12-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/elizabethfuentes12/)
+[![X](https://img.shields.io/badge/Twitter-@ElizabethFue12-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white)](https://x.com/ElizabethFue12)
+[![Instagram](https://img.shields.io/badge/Instagram-@elifue.tech-E4405F?style=for-the-badge&logo=instagram&logoColor=white)](https://www.instagram.com/elifue.tech)
+[![YouTube](https://img.shields.io/badge/YouTube-Channel-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UCr0Gnc-t30m4xyrvsQpNp2Q?sub_confirmation=1)
