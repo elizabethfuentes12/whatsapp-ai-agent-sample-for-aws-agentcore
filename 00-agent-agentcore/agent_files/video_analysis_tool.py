@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 TL_SECRET_ARN = os.environ.get("TL_SECRET_ARN", "")
 TL_BASE_URL = "https://api.twelvelabs.io/v1.3"
 REGION = os.environ.get("AWS_REGION", "us-east-1")
-DEFAULT_INDEX_NAME = "whatsapp-video-index"
+DEFAULT_INDEX_NAME = os.environ.get("TL_INDEX_NAME", "whatsapp-video-index")
+TL_MODEL_NAME = os.environ.get("TL_MODEL_NAME", "pegasus1.2")
 S3_PRESIGNED_EXPIRY = 3600  # 1 hour
 
 _cached_api_key = None
@@ -74,7 +75,7 @@ def _get_or_create_index(client, index_name: str):
         index_name=index_name,
         models=[
             IndexesCreateRequestModelsItem(
-                model_name="pegasus1.2",
+                model_name=TL_MODEL_NAME,
                 model_options=["visual", "audio"],
             )
         ],

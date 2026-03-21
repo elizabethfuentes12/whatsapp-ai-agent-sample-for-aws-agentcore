@@ -26,6 +26,7 @@ from agentcore.agentcore_memory import AgentCoreMemory
 
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 MODEL_ID = os.environ.get("MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0")
+TL_MODEL_NAME = os.environ.get("TL_MODEL_NAME", "pegasus1.2")
 
 
 class AgentAgentCoreStack(Stack):
@@ -73,6 +74,7 @@ class AgentAgentCoreStack(Stack):
                 "AWS_REGION": REGION,
                 "MODEL_ID": MODEL_ID,
                 "TL_SECRET_ARN": tl_secret.secret_arn,
+                "TL_MODEL_NAME": TL_MODEL_NAME,
             },
         )
 

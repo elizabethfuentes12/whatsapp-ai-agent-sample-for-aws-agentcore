@@ -60,14 +60,49 @@ bash create_deployment_package.sh   # builds ARM64 ZIP in agent_files/
 cdk deploy
 ```
 
+## How do I configure the AI models?
+
+Both the LLM (Large Language Model) and the video analysis model are configurable via environment variables. To change a model, set the variable before running `cdk deploy` — no code changes required.
+
+| Variable | Default | Description | How to change |
+|----------|---------|-------------|---------------|
+| `MODEL_ID` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | [Anthropic Claude](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) model for the agent | Set `MODEL_ID` env var before deploy. See [supported models](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). |
+| `TL_MODEL_NAME` | `pegasus1.2` | [TwelveLabs Pegasus](https://docs.twelvelabs.io/docs/concepts/models) model for video analysis | Set `TL_MODEL_NAME` env var before deploy. See [TwelveLabs models](https://docs.twelvelabs.io/docs/concepts/models). |
+
+Example — deploy with a different Claude model:
+
+```bash
+export MODEL_ID="us.anthropic.claude-sonnet-4-6-20250514-v1:0"
+cdk deploy
+```
+
+## How do I set up TwelveLabs for video analysis?
+
+[TwelveLabs](https://www.twelvelabs.io/) provides the video understanding capabilities (scene detection, action recognition, speech-to-text, on-screen text extraction).
+
+**Step 1**: Create a free account at [TwelveLabs Dashboard](https://dashboard.twelvelabs.io/).
+
+**Step 2**: Generate an API key from the [API Keys page](https://dashboard.twelvelabs.io/api-key).
+
+**Step 3**: After deploying the stack, update the API key in [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id <TwelveLabsSecretArn from stack output> \
+  --secret-string '{"TL_API_KEY":"your-actual-key"}'
+```
+
+The agent automatically creates a TwelveLabs index (`whatsapp-video-index`) on first use and uploads videos for analysis via pre-signed S3 URLs.
+
 ## Environment Variables (Runtime)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AWS_REGION` | `us-east-1` | AWS region |
-| `MODEL_ID` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | Claude model for the agent |
-| `BEDROCK_AGENTCORE_MEMORY_ID` | Set by stack | Memory resource ID |
-| `S3_BUCKET` | Set by stack | S3 bucket name |
+| `AWS_REGION` | `us-east-1` | AWS region for all API calls |
+| `MODEL_ID` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | [Claude model ID](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
+| `TL_MODEL_NAME` | `pegasus1.2` | [TwelveLabs model](https://docs.twelvelabs.io/docs/concepts/models) for video indexing |
+| `TL_SECRET_ARN` | Set by stack | Secrets Manager ARN for TwelveLabs API key |
+| `BEDROCK_AGENTCORE_MEMORY_ID` | Set by stack | AgentCore Memory resource ID |
 
 ## CDK Resources
 

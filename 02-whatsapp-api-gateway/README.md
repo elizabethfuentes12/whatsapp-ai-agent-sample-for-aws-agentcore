@@ -1,8 +1,8 @@
 # WhatsApp Multimodal AI Agent with Meta Cloud API, Amazon API Gateway and Amazon Bedrock AgentCore
 
-Process text, images, video, audio, and documents from WhatsApp using the [Meta WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) directly with [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), a 6-function [AWS Lambda](https://aws.amazon.com/lambda/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) pipeline, and [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) for persistent conversation context.
+Process text, images, video, audio, and documents from WhatsApp using the [Meta WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) directly with [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), a 2-Lambda architecture with [DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) tumbling window for message buffering, and [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) for persistent conversation context.
 
-This integration pattern uses a 2-Lambda architecture with SQS-based message debouncing to aggregate rapid-fire messages into a single agent invocation, reducing token usage and costs.
+This integration pattern uses a 2-Lambda architecture with DynamoDB Streams tumbling window for message buffering, aggregating rapid-fire messages into a single agent invocation to reduce token usage and costs.
 
 > Your data will be securely stored in your AWS account and will not be shared or used for model training. It is not recommended to share private information because the security of data with WhatsApp is not guaranteed.
 
@@ -27,17 +27,17 @@ This integration pattern uses a 2-Lambda architecture with SQS-based message deb
 - Stack `00-agent-agentcore` deployed (provides SSM parameters)
 - [TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) model enabled in [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) console for video analysis
 
-## How The App Works
+## How does this application work?
 
 ![Architecture](./images/diagram.svg)
 
-### Infrastructure
+### What infrastructure is deployed?
 
 The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to define and deploy the following resources:
 
 - [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - `webhook_receiver`: Validates webhook, downloads media to S3, saves to DynamoDB, and triggers debounce buffer.
-  - `message_processor`: Aggregates buffered messages, invokes agent, transcribes audio, and sends replies via Meta Graph API.
+  - `webhook_receiver`: Validates webhook, downloads media to S3, saves to DynamoDB.
+  - `message_processor`: Aggregates buffered messages, transcribes audio, invokes AgentCore, sends reply via [Meta Graph API](https://developers.facebook.com/docs/graph-api/).
 
 - [Amazon Simple Storage Service (Amazon S3)](https://aws.amazon.com/s3/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - Bucket for storing media files and transcription outputs.
@@ -51,7 +51,7 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
   - REST API with `/webhook` endpoint (POST for messages, GET for verification).
 
 - [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - Stores WhatsApp credentials (verification token, API token, display phone number for filtering).
+  - Stores three WhatsApp credentials: `WHATS_VERIFICATION_TOKEN` (webhook verification token), `WHATS_TOKEN` ([Meta Graph API](https://developers.facebook.com/docs/graph-api/) access token), and `DISPLAY_PHONE_NUMBER` (business phone number for message filtering).
 
 - [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - Runtime invocation for processing all message types with multimodal Strands agent.
@@ -60,13 +60,13 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
 - [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - Used for transcribing audio/voice messages (synchronous polling in the processor Lambda).
 
-### Data Flow
+### What is the data flow?
 
 1. User sends a WhatsApp message.
 2. [Meta WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) forwards the message to [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) webhook.
-3. `webhook_receiver` Lambda validates, downloads media to S3, saves to DynamoDB (`PENDING`), and sends a delayed SQS message.
-4. Debounce: each new message increments an atomic counter. After 3 seconds of inactivity, `message_processor` fires.
-5. `message_processor` checks the counter, queries all `PENDING` messages for the phone, and aggregates them:
+3. `webhook_receiver` Lambda validates, downloads media to S3, and saves to DynamoDB (`PENDING`).
+4. DynamoDB Streams captures the INSERT event. The tumbling window (20 seconds) buffers records before invoking `message_processor`.
+5. `message_processor` queries all `PENDING` messages for the phone and aggregates them:
    - **Text**: Messages joined with newlines into a single prompt.
    - **Image/Document**: Downloaded from S3, base64-encoded, sent as inline content block to the agent.
    - **Video**: S3 URI sent to the agent which uses the `video_analysis` tool ([TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) via [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)).
@@ -74,9 +74,9 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
 6. [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) processes the aggregated message with memory context.
 7. Response is sent back to the user via Meta Graph API.
 
-### Message Buffering (Tumbling Window)
+### How does message buffering work?
 
-When users send multiple messages in quick succession (common in WhatsApp), the tumbling window accumulates them into a single agent invocation. This reduces token usage and AgentCore Runtime costs.
+The architecture uses a [DynamoDB Streams tumbling window](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.Lambda.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) (default: 20 seconds) to batch rapid-fire WhatsApp messages into a single agent invocation. When users send multiple messages in quick succession (common in WhatsApp), this reduces token usage and AgentCore Runtime costs.
 
 **How it works:**
 
@@ -92,23 +92,23 @@ User sends 3 messages in 2 seconds:
   "tengo una duda" -> DDB INSERT (t=1s)
   "sobre mi video" -> DDB INSERT (t=2s)
 
-Tumbling window fires at t=3s:
+Tumbling window fires at t=20s:
   -> Processor receives all 3 records in one batch
   -> Aggregates: "hola\ntengo una duda\nsobre mi video"
   -> Single AgentCore invocation
 ```
 
-The buffer duration is configurable in the CDK construct (default: 3 seconds).
+The buffer duration is configurable in the CDK construct (default: 20 seconds).
 
 > This buffering technique is based on [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat), which demonstrates DynamoDB Streams with tumbling windows for WhatsApp message aggregation. That project reports reducing ~1,000 raw messages to ~250 aggregated messages (4:1 ratio), yielding approximately 75% cost savings on downstream processing. In our case, the savings apply to AgentCore Runtime invocations and LLM token usage.
 
-#### 3 - Agent Processing
+#### How does agent processing work?
 
-1. `agent_processor` invokes Amazon Bedrock AgentCore Runtime with the message payload.
+1. `message_processor` invokes [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with the aggregated message payload.
 2. [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) provides conversation context (short-term turns + long-term facts).
-3. The response is sent to `whatsapp_out` which delivers it via Meta Graph API.
+3. The response is sent back to the user via [Meta Graph API](https://developers.facebook.com/docs/graph-api/).
 
-### For pricing details, see:
+### What are the pricing details?
 
 - [Amazon Bedrock Pricing](https://aws.amazon.com/bedrock/pricing/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [AWS Lambda Pricing](https://aws.amazon.com/lambda/pricing/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
@@ -118,55 +118,56 @@ The buffer duration is configurable in the CDK construct (default: 3 seconds).
 - [Amazon API Gateway Pricing](https://aws.amazon.com/api-gateway/pricing/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [WhatsApp pricing](https://developers.facebook.com/docs/whatsapp/pricing/)
 
-### Key Files
+### What are the key files?
 
 - `app.py`: Entry point for the CDK application.
-- `lambdas/project_lambdas.py`: CDK construct defining all 6 Lambdas + permissions.
-- `lambdas/code/whatsapp_in/lambda_function.py`: Webhook handler (POST: store message, GET: verify token).
-- `lambdas/code/process_stream/lambda_function.py`: Stream consumer — routes text/image/video/audio/document.
-- `lambdas/code/agent_processor/lambda_function.py`: Builds multimodal payloads and invokes Amazon Bedrock AgentCore Runtime.
-- `lambdas/code/audio_transcriptor/lambda_function.py`: Starts Amazon Transcribe jobs.
-- `lambdas/code/transcriber_done/lambda_function.py`: Reads transcript, invokes agent_processor.
-- `lambdas/code/whatsapp_out/lambda_function.py`: Sends replies via Meta Graph API.
+- `lambdas/project_lambdas.py`: CDK construct defining both Lambdas, DynamoDB table, and permissions.
+- `lambdas/code/webhook_receiver/lambda_function.py`: Webhook handler (POST: download media, store message in DynamoDB; GET: verify token).
+- `lambdas/code/message_processor/lambda_function.py`: Stream consumer -- aggregates buffered messages, transcribes audio via [Amazon Transcribe](https://docs.aws.amazon.com/transcribe/latest/dg/what-is.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), invokes [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), sends reply via [Meta Graph API](https://developers.facebook.com/docs/graph-api/).
 - `layers/common/python/utils.py`: Webhook validation, response builders, phone normalization.
 - `layers/common/python/media_utils.py`: Media download (Graph API), Amazon S3 upload, base64 encoding.
 - `apis/webhooks.py`: Amazon API Gateway REST API construct.
 - `get_param.py`: Reads AgentCore ARN from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) at synthesis time.
 
-## Usage Instructions
+## How do I deploy this?
 
 ### Installation
 
 ✅ **Clone the repository**:
-```
+```bash
 git clone https://github.com/aws-samples/whatsapp-ai-agent-sample-for-aws-agentcore
 cd 02-whatsapp-api-gateway
 ```
 
 ✅ **Create and activate a virtual environment**:
-```
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
 ✅ **Install dependencies**:
-```
+```bash
 uv pip install -r requirements.txt
 ```
 
-✅ **Synthesize the CloudFormation template**:
+✅ **Install layer dependencies**:
+```bash
+cd layers/common && pip install requests -t python/
 ```
+
+✅ **Synthesize the CloudFormation template**:
+```bash
 cdk synth
 ```
 
 ✅ **Deploy**:
-```
+```bash
 cdk deploy
 ```
 
 > Note the output values, especially the Amazon API Gateway URL, which will be used for configuring the WhatsApp webhook.
 
-## Configuration
+## How do I configure WhatsApp?
 
 ### Step 0: Activate WhatsApp account Facebook Developers
 
@@ -216,20 +217,40 @@ aws secretsmanager put-secret-value \
 4. Images, videos, and documents are downloaded to Amazon S3 and processed by the agent.
 5. The response is sent back to the user via WhatsApp.
 
-## Clean up
+## How do I clean up resources?
 
 If you finish testing and want to clean the application:
 
 1. Delete the files from the Amazon S3 bucket created in the deployment.
 2. Run this command in your terminal:
 
-```
+```bash
 cdk destroy
 ```
 
-## Some links for more information
+## Where can I learn more?
 
 - [Amazon Bedrock AgentCore documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Amazon Bedrock AgentCore Runtime Sessions](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Meta WhatsApp Cloud API documentation](https://developers.facebook.com/docs/whatsapp/cloud-api)
+- [DynamoDB Streams and AWS Lambda triggers](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.Lambda.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
+- [Meta Graph API reference](https://developers.facebook.com/docs/graph-api/)
+
+---
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING](CONTRIBUTING.md) for more information.
+
+---
+
+## Security
+
+If you discover a potential security issue in this project, notify AWS/Amazon Security via the [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/). Please do **not** create a public GitHub issue.
+
+---
+
+## License
+
+This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file for details.
