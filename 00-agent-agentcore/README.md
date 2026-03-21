@@ -13,7 +13,7 @@ The agent processes text, images, documents, audio transcripts, and videos. Sinc
 | File | Purpose |
 |------|---------|
 | `agent_files/multimodal_agent.py` | Strands Agent — handles text, image, document, audio, video |
-| `agent_files/video_analysis_tool.py` | Strands tool calling [TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) via Bedrock |
+| `agent_files/video_analysis_tool.py` | Strands tool calling [TwelveLabs Pegasus](https://docs.twelvelabs.io/docs/concepts/models) via [TwelveLabs API](https://www.twelvelabs.io/) (direct) |
 | `agent_files/requirements.txt` | Runtime dependencies (strands-agents, bedrock-agentcore) |
 | `create_deployment_package.sh` | Builds ARM64-optimized ZIP for AgentCore Runtime |
 | `agentcore/agentcore_deployment.py` | CDK construct for [CfnRuntime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtimes.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
@@ -26,7 +26,7 @@ The agent processes text, images, documents, audio transcripts, and videos. Sinc
 |------------|---------|--------|-------------|
 | **Image** | JPEG, PNG, GIF, WebP | Max 5 MB, max 8000x8000 px | Claude vision via inline content blocks |
 | **Document** | PDF, CSV, DOC, DOCX, XLS, XLSX, HTML, TXT, MD | Max ~1.5 MB, PDFs up to 600 pages | Claude reads via inline content blocks |
-| **Video** | MP4, MOV, MKV, WebM, FLV, MPEG, 3GP | Max 2 GB / 1 hour, min ~4s, H.264/H.265 | `video_analysis` tool via [TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) on [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
+| **Video** | MP4, MOV, MKV, WebM, FLV, MPEG, 3GP | Max 2 GB / 1 hour, min ~4s, H.264/H.265 | `video_analysis` tool via [TwelveLabs Pegasus](https://docs.twelvelabs.io/docs/concepts/models) ([TwelveLabs API](https://www.twelvelabs.io/) direct) |
 | **Audio** | OGG, MP3, AAC, M4A, WAV, AMR | Any WhatsApp format | [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) → text prompt |
 
 ## Runtime Session Lifecycle
@@ -112,3 +112,21 @@ The agent automatically creates a TwelveLabs index (`whatsapp-video-index`) on f
 - **CfnRuntimeEndpoint** — `WhatsAppAgentEndpoint`
 - **IAM Role** — Bedrock, CloudWatch, XRay, S3 access, Marketplace subscriptions
 - **[SSM Parameters](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)** — 4 parameters for cross-stack sharing (runtime ARN, bucket, memory ID, role ARN)
+
+---
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING](../CONTRIBUTING.md) for more information.
+
+---
+
+## Security
+
+If you discover a potential security issue in this project, notify AWS/Amazon Security via the [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/). Please do **not** create a public GitHub issue.
+
+---
+
+## License
+
+This library is licensed under the MIT-0 License. See the [LICENSE](../LICENSE) file for details.

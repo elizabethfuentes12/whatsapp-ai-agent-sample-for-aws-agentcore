@@ -2,8 +2,6 @@
 
 Process text, images, video, audio, and documents from WhatsApp using the [Meta WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) directly with [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), a 2-Lambda architecture with [DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) tumbling window for message buffering, and [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) for persistent conversation context.
 
-This integration pattern uses a 2-Lambda architecture with DynamoDB Streams tumbling window for message buffering, aggregating rapid-fire messages into a single agent invocation to reduce token usage and costs.
-
 > Your data will be securely stored in your AWS account and will not be shared or used for model training. It is not recommended to share private information because the security of data with WhatsApp is not guaranteed.
 
 | Voice notes | Image |
@@ -25,7 +23,7 @@ This integration pattern uses a 2-Lambda architecture with DynamoDB Streams tumb
 - [AWS Cloud Development Kit (CDK)](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) v2 or later
 - [Meta Developer account](https://developers.facebook.com/) with WhatsApp Business API access
 - Stack `00-agent-agentcore` deployed (provides SSM parameters)
-- [TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) model enabled in [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) console for video analysis
+- [TwelveLabs](https://www.twelvelabs.io/) API key for video analysis (free account at [twelvelabs.io](https://www.twelvelabs.io/))
 
 ## How does this application work?
 
@@ -69,7 +67,7 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
 5. `message_processor` queries all `PENDING` messages for the phone and aggregates them:
    - **Text**: Messages joined with newlines into a single prompt.
    - **Image/Document**: Downloaded from S3, base64-encoded, sent as inline content block to the agent.
-   - **Video**: S3 URI sent to the agent which uses the `video_analysis` tool ([TwelveLabs Pegasus](https://aws.amazon.com/marketplace/pp/prodview-mf4e5dbnkqvck?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) via [Amazon Bedrock](https://aws.amazon.com/bedrock/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)).
+   - **Video**: S3 URI sent to the agent which uses the `video_analysis` tool ([TwelveLabs Pegasus](https://docs.twelvelabs.io/docs/concepts/models) via [TwelveLabs API](https://www.twelvelabs.io/)).
    - **Audio**: Transcribed synchronously using [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), then sent as text to the agent.
 6. [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) processes the aggregated message with memory context.
 7. Response is sent back to the user via Meta Graph API.
@@ -241,7 +239,7 @@ cdk destroy
 
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING](CONTRIBUTING.md) for more information.
+Contributions are welcome! See [CONTRIBUTING](../CONTRIBUTING.md) for more information.
 
 ---
 
@@ -253,4 +251,4 @@ If you discover a potential security issue in this project, notify AWS/Amazon Se
 
 ## License
 
-This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file for details.
+This library is licensed under the MIT-0 License. See the [LICENSE](../LICENSE) file for details.
