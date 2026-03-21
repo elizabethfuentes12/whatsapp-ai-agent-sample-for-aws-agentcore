@@ -230,7 +230,7 @@ Open the notebook and follow the instructions to invoke the agent directly, with
 | Video analysis S3 errors | The AgentCore runtime role needs `s3:GetObject` on the media bucket. Stack 01 grants this automatically using the runtime role ARN exported via SSM by Stack 00. |
 | Agent does not pick up new code | Wait 15 minutes for the idle timeout, or use a new `session_id` to force a fresh microVM. |
 
-For additional help, open an issue in this repository or consult the [Amazon Bedrock AgentCore Developer Guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
+For additional help, consult the [Amazon Bedrock AgentCore Developer Guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
 
 ---
 
