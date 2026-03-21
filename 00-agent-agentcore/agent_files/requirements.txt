@@ -4,3 +4,4 @@ strands-agents
 strands-agents-tools
 requests
 twelvelabs
+yt-dlp

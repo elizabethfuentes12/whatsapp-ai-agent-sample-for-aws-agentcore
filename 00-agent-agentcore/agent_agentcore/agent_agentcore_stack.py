@@ -75,6 +75,7 @@ class AgentAgentCoreStack(Stack):
                 "AWS_REGION": REGION,
                 "MODEL_ID": MODEL_ID,
                 "TL_SECRET_ARN": tl_secret.secret_arn,
+                "S3_BUCKET": bucket.bucket_name,
             },
         )
 
