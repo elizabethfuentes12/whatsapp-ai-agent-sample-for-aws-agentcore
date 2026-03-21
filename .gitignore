@@ -219,3 +219,11 @@ __marimo__/
 *.mp4
 images/blog-cover*.png
 images/social-flow-diagram*.png
+
+# Lambda layer installed dependencies (install with pip before deploy)
+02-whatsapp-api-gateway/layers/common/python/certifi*/
+02-whatsapp-api-gateway/layers/common/python/charset_normalizer*/
+02-whatsapp-api-gateway/layers/common/python/idna*/
+02-whatsapp-api-gateway/layers/common/python/requests*/
+02-whatsapp-api-gateway/layers/common/python/urllib3*/
+02-whatsapp-api-gateway/layers/common/python/*dist-info/
