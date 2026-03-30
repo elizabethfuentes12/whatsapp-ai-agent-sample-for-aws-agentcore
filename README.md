@@ -14,6 +14,8 @@ A channel-agnostic multimodal AI agent that processes text, images, audio, video
 
 The agent runs on [AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with [AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), supports 6 media types (text, image, audio, video, document, and voice notes), and includes 2 WhatsApp integration patterns plus Instagram DM support. A DynamoDB Streams tumbling window reduces AgentCore invocations by approximately 75% through message buffering.
 
+> **Important**: This is a **demo project** intended for learning and experimentation purposes only. It is **not designed for production use**. The goal is to illustrate architectural patterns and integration techniques that can serve as inspiration for building your own production-grade solutions. If you plan to use these patterns in a production environment, make sure to implement proper security hardening, error handling, scalability testing, and operational monitoring.
+
 > **Complexity note**: This guide assumes familiarity with [AWS CDK](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), [AWS Lambda](https://aws.amazon.com/lambda/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), WhatsApp Business API, and [Amazon Bedrock AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). A Quick Start is in the [Deployment Sequence](#how-do-i-deploy) section. Similar agent patterns can be applied using [LangGraph](https://github.com/langchain-ai/langgraph), [AutoGen](https://github.com/microsoft/autogen), or the [Amazon Bedrock Agents SDK](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html). This sample uses [Strands Agents](https://strandsagents.com/) for its lightweight tool integration model.
 
 ## Architecture
@@ -292,3 +294,16 @@ If you discover a potential security issue in this project, notify AWS/Amazon Se
 ## License
 
 This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## Connect with me
+
+🇻🇪
+
+[![Dev.to](https://img.shields.io/badge/Dev.to-@elizabethfuentes12-0A0A0A?style=for-the-badge&logo=dev.to&logoColor=white)](https://dev.to/elizabethfuentes12)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-lizfue-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/lizfue/)
+[![GitHub](https://img.shields.io/badge/GitHub-elizabethfuentes12-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/elizabethfuentes12/)
+[![X](https://img.shields.io/badge/Twitter-@ElizabethFue12-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white)](https://x.com/ElizabethFue12)
+[![Instagram](https://img.shields.io/badge/Instagram-@elifue.tech-E4405F?style=for-the-badge&logo=instagram&logoColor=white)](https://www.instagram.com/elifue.tech)
+[![YouTube](https://img.shields.io/badge/YouTube-Channel-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UCr0Gnc-t30m4xyrvsQpNp2Q?sub_confirmation=1)

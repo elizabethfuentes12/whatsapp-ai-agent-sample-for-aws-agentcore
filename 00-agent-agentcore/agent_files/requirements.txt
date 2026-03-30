@@ -4,3 +4,5 @@ strands-agents
 strands-agents-tools
 requests
 twelvelabs
+strands-agents[otel]>=1.27.0
+aws-opentelemetry-distro>=0.7.0
