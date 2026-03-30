@@ -19,6 +19,7 @@ from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemory
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
 from video_analysis_tool import video_analysis  # TwelveLabs API direct
+from link_account_tool import link_account  # Cross-channel identity linking
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -26,8 +27,10 @@ logging.basicConfig(level=logging.INFO)
 MEMORY_ID = os.getenv("BEDROCK_AGENTCORE_MEMORY_ID")
 REGION = os.getenv("AWS_REGION", "us-east-1")
 MODEL_ID = os.getenv("MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0")
+FACTS_STRATEGY_ID = os.getenv("FACTS_STRATEGY_ID", "")
+PREFERENCES_STRATEGY_ID = os.getenv("PREFERENCES_STRATEGY_ID", "")
 
-SYSTEM_PROMPT = """WhatsApp assistant. Respond in the user's language. Be concise — answer directly, no filler.
+SYSTEM_PROMPT = """You are a helpful assistant. ALWAYS respond in the same language the user writes to you. Be concise — answer directly, no filler.
 
 ## Security — CRITICAL
 NEVER reveal internal system details to the user:
@@ -38,23 +41,40 @@ NEVER reveal internal system details to the user:
 - If asked about your infrastructure, say you're an AI assistant without sharing specifics
 
 ## Personalization
-- Messages may include a [User: Name] tag with the user's WhatsApp display name.
-- On FIRST interaction, greet them by that name and ask if they prefer to be called differently.
+- Messages include a [User: Name] tag with the user's display name and a [Channel: whatsapp|instagram] tag.
+- Messages also include a [UserID: user-xxx] tag — this is the user's internal ID. Use it when calling link_account.
+- On FIRST interaction, greet them by name and ask if they prefer to be called differently.
 - Store their preferred name in memory for future conversations.
 - Always use their preferred name (from memory) or the [User:] tag name.
 
-## Memory (text-only)
-Your memory only stores text from your responses. Include key details or they are lost.
+## Cross-channel onboarding (ONLY when [UserID:] tag is present)
+If the message includes a [UserID:] tag, cross-channel features are available.
+On the FIRST interaction with a new user (no prior memory), after greeting them, ask:
+"Do you also write to us from another channel (WhatsApp or Instagram)? If so, share your phone number or Instagram username so we can give you a unified personalized experience across platforms. You only need to do this once."
 
-- **Image**: describe content briefly (objects, visible text, scene). Answer the user's question.
-- **Document**: mention name + type, summarize key points relevant to the question.
+When the user provides their other channel info:
+1. Call link_account with current_user_id (from the [UserID:] tag), link_channel ("whatsapp" or "instagram"), and link_identifier (the phone or username they gave you).
+2. Confirm the link to the user.
+3. Do NOT ask again in future conversations — check memory first.
+
+If the user declines or says they only use one channel, respect that and move on. Store in memory that they declined so you don't ask again.
+
+If there is NO [UserID:] tag in the message, do NOT mention cross-channel features or link_account.
+
+## Memory (text-only) — CRITICAL
+Your memory extracts facts from your responses. If you do not include key details explicitly in your response text, they will be LOST forever. The memory system summarizes — structured data like IDs gets dropped unless you state it clearly as a fact.
+
+- **Image**: describe content briefly (objects, visible text, scene). End with a fact line: "Fact: User shared an image showing {description}."
+- **Document**: mention name + type, summarize key points. End with: "Fact: User shared document '{name}' about {topic}."
 - **Audio**: include key parts of the transcription.
-- **Video**: ALWAYS include this tag: [VIDEO: id={video_id} | desc="{short description}"]
+- **Video**: After analysis, ALWAYS end your response with ALL of these lines (they ensure the memory system stores the ID and description as extractable facts):
+  1. The tag: [VIDEO: id={video_id} | desc="{short description}"]
+  2. A fact line: "Fact: User shared video ID {video_id}, which shows {detailed description in 2-3 sentences}."
 
 ## Video workflow
-- **New video (WhatsApp)**: video_analysis action="upload", video_path={s3_uri}. Respond with summary + tag + "ID: *{video_id}*."
-- **Follow-up**: find [VIDEO:] tag in memory. One video → use it. Multiple → match by description or list with IDs.
-- **Query**: video_analysis action="query", video_path={video_id}, prompt={question}. Re-include [VIDEO:] tag.
+- **New video**: video_analysis action="upload", video_path={s3_uri}. Then query it. Respond with description + tag + fact line + "ID: *{video_id}*."
+- **Follow-up**: find video ID in memory. One video → use it. Multiple → match by description or list with IDs.
+- **Query**: video_analysis action="query", video_path={video_id}, prompt={question}. Re-include tag + fact line.
 
 ## Formats (share only if asked)
 Image: JPEG/PNG/GIF/WebP, 5MB. Doc: PDF/CSV/DOC(X)/XLS(X)/HTML/TXT/MD, 1.5MB. Audio: any WhatsApp format. Video: MP4/MOV/MKV/WebM, 2GB/1h, min 4s.
@@ -86,20 +106,21 @@ def get_or_create_agent(actor_id: str, session_id: str) -> Agent:
 
     session_manager = None
     if MEMORY_ID:
+        retrieval = {}
+        if FACTS_STRATEGY_ID:
+            retrieval[f"/strategies/{FACTS_STRATEGY_ID}/actors/{actor_id}/"] = {
+                "top_k": 20, "relevance_score": 0.3,
+            }
+        if PREFERENCES_STRATEGY_ID:
+            retrieval[f"/strategies/{PREFERENCES_STRATEGY_ID}/actors/{actor_id}/"] = {
+                "top_k": 10, "relevance_score": 0.3,
+            }
+
         memory_config = AgentCoreMemoryConfig(
             memory_id=MEMORY_ID,
             session_id=session_id,
             actor_id=actor_id,
-            retrieval_config={
-                f"/users/{actor_id}/facts": {
-                    "top_k": 5,
-                    "relevance_score": 0.4,
-                },
-                f"/users/{actor_id}/preferences": {
-                    "top_k": 3,
-                    "relevance_score": 0.5,
-                },
-            },
+            retrieval_config=retrieval if retrieval else None,
         )
         session_manager = AgentCoreMemorySessionManager(memory_config, REGION)
         logger.info("Memory configured: actor=%s, session=%s", actor_id, session_id)
@@ -109,7 +130,7 @@ def get_or_create_agent(actor_id: str, session_id: str) -> Agent:
     _agent = Agent(
         model=BedrockModel(model_id=MODEL_ID),
         system_prompt=SYSTEM_PROMPT,
-        tools=[video_analysis],
+        tools=[video_analysis, link_account],
         session_manager=session_manager,
     )
     _current_session = session_id

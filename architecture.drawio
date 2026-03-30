@@ -8,7 +8,7 @@
         <!-- ============================================================ -->
         <!-- DESCRIPTION TEXT BLOCK                                        -->
         <!-- ============================================================ -->
-        <mxCell id="desc" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;WhatsApp AI Agent - Architecture Overview&lt;/h2&gt;&lt;p&gt;Three independent CDK stacks sharing configuration via AWS Systems Manager Parameter Store:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;b&gt;Stack 00&lt;/b&gt;: AgentCore Runtime + Memory with Strands multimodal agent, Claude Sonnet, and TwelveLabs video analysis.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Stack 01&lt;/b&gt;: WhatsApp via AWS End User Messaging Social - SNS triggers receiver Lambda, DynamoDB Stream tumbling window buffers messages, processor invokes AgentCore.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Stack 02&lt;/b&gt;: WhatsApp via Meta Cloud API - API Gateway webhook triggers receiver Lambda, same DynamoDB buffering pattern, processor invokes AgentCore.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Both Stack 01 and 02 use a &lt;b&gt;tumbling window&lt;/b&gt; (3s) to aggregate rapid-fire messages into a single agent invocation, reducing token usage and costs.&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;spacing=9;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="desc" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;WhatsApp AI Agent - Architecture Overview&lt;/h2&gt;&lt;p&gt;Three independent CDK stacks sharing configuration via AWS Systems Manager Parameter Store:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;b&gt;Stack 00&lt;/b&gt;: AgentCore Runtime + Memory with Strands multimodal agent, Claude Sonnet, and TwelveLabs video analysis.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Stack 01&lt;/b&gt;: WhatsApp via AWS End User Messaging Social - SNS triggers receiver Lambda, DynamoDB Stream tumbling window buffers messages, processor invokes AgentCore.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Stack 02&lt;/b&gt;: WhatsApp + Instagram via Meta Cloud API - API Gateway webhook, dual-channel receiver, DynamoDB buffering, unified user identity, processor invokes AgentCore.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Both Stack 01 and 02 use a &lt;b&gt;tumbling window&lt;/b&gt; (3s) to aggregate rapid-fire messages into a single agent invocation, reducing token usage and costs.&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;spacing=9;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="120" y="-180" width="1300" height="200" as="geometry" />
         </mxCell>
 
@@ -17,6 +17,21 @@
         <!-- ============================================================ -->
         <mxCell id="user" value="WhatsApp Users" style="dashed=0;outlineConnect=0;html=1;align=center;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;shape=mxgraph.weblogos.whatsapp;fillColor=#00E676;strokeColor=none;fontSize=11;fontStyle=0;" vertex="1" parent="1">
           <mxGeometry x="-30" y="340" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- External: Instagram Users (below WhatsApp, connects to Stack 02) -->
+        <mxCell id="ig_user" value="Instagram Users" style="shape=image;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;imageAspect=0;image=https://cdn.simpleicons.org/instagram/E4405F;" vertex="1" parent="1">
+          <mxGeometry x="-30" y="520" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Instagram Users -> API GW (green, route to Stack 02) -->
+        <mxCell id="e_ig_apigw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#009900;strokeWidth=2;flowAnimation=1;" edge="1" parent="1" source="ig_user" target="apigw">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="70" y="550" />
+              <mxPoint x="70" y="545" />
+            </Array>
+          </mxGeometry>
         </mxCell>
 
         <!-- ============================================================ -->
@@ -36,21 +51,21 @@
         <!-- ============================================================ -->
         <!-- STACK 01 BOX (blue) - top left                                -->
         <!-- ============================================================ -->
-        <mxCell id="stack01_box" value="Stack 01: End User Messaging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#147EBA;strokeWidth=2;dashed=1;fontSize=14;fontStyle=1;fontColor=#147EBA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=5;container=0;" vertex="1" parent="region">
+        <mxCell id="stack01_box" value="Stack 01: End User Messaging (WhatsApp)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#147EBA;strokeWidth=2;dashed=1;fontSize=13;fontStyle=1;fontColor=#147EBA;verticalAlign=top;align=right;spacingRight=10;spacingTop=5;container=0;" vertex="1" parent="region">
           <mxGeometry x="20" y="30" width="720" height="330" as="geometry" />
         </mxCell>
 
         <!-- ============================================================ -->
         <!-- STACK 02 BOX (purple) - bottom left                           -->
         <!-- ============================================================ -->
-        <mxCell id="stack02_box" value="Stack 02: API Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#8C4FFF;strokeWidth=2;dashed=1;fontSize=14;fontStyle=1;fontColor=#8C4FFF;verticalAlign=top;align=left;spacingLeft=10;spacingTop=5;container=0;" vertex="1" parent="region">
+        <mxCell id="stack02_box" value="Stack 02: Multichannel (WhatsApp + Instagram)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#8C4FFF;strokeWidth=2;dashed=1;fontSize=13;fontStyle=1;fontColor=#8C4FFF;verticalAlign=top;align=right;spacingRight=10;spacingTop=5;container=0;" vertex="1" parent="region">
           <mxGeometry x="20" y="410" width="720" height="380" as="geometry" />
         </mxCell>
 
         <!-- ============================================================ -->
         <!-- STACK 00 BOX (orange) - right side                            -->
         <!-- ============================================================ -->
-        <mxCell id="stack00_box" value="Stack 00: AgentCore" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#FF8000;strokeWidth=2;dashed=1;fontSize=14;fontStyle=1;fontColor=#FF8000;verticalAlign=top;align=left;spacingLeft=10;spacingTop=5;container=0;" vertex="1" parent="region">
+        <mxCell id="stack00_box" value="Stack 00: AgentCore" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#FF8000;strokeWidth=2;dashed=1;fontSize=13;fontStyle=1;fontColor=#FF8000;verticalAlign=top;align=right;spacingRight=10;spacingTop=5;container=0;" vertex="1" parent="region">
           <mxGeometry x="790" y="30" width="520" height="760" as="geometry" />
         </mxCell>
 

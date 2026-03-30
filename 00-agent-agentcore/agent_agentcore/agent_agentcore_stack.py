@@ -75,6 +75,8 @@ class AgentAgentCoreStack(Stack):
                 "MODEL_ID": MODEL_ID,
                 "TL_SECRET_ARN": tl_secret.secret_arn,
                 "TL_MODEL_NAME": TL_MODEL_NAME,
+                "FACTS_STRATEGY_ID": os.environ.get("FACTS_STRATEGY_ID", ""),
+                "PREFERENCES_STRATEGY_ID": os.environ.get("PREFERENCES_STRATEGY_ID", ""),
             },
         )
 

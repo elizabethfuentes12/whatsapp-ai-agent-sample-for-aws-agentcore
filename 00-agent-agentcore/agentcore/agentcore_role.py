@@ -70,3 +70,10 @@ class AgentCoreRole(Construct):
                 resources=["*"],
             )
         )
+
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=["arn:aws:ssm:*:*:parameter/agentcore/*"],
+            )
+        )

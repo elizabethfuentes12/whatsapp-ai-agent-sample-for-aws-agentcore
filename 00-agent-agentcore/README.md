@@ -14,11 +14,12 @@ The agent processes text, images, documents, audio transcripts, and videos. Sinc
 |------|---------|
 | `agent_files/multimodal_agent.py` | Strands Agent — handles text, image, document, audio, video |
 | `agent_files/video_analysis_tool.py` | Strands tool calling [TwelveLabs Pegasus](https://docs.twelvelabs.io/docs/concepts/models) via [TwelveLabs API](https://www.twelvelabs.io/) (direct) |
+| `agent_files/link_account_tool.py` | Strands tool for cross-channel identity linking — merges WhatsApp and Instagram users in the unified users table (reads table name from SSM at runtime) |
 | `agent_files/requirements.txt` | Runtime dependencies (strands-agents, bedrock-agentcore) |
 | `create_deployment_package.sh` | Builds ARM64-optimized ZIP for AgentCore Runtime |
 | `agentcore/agentcore_deployment.py` | CDK construct for [CfnRuntime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtimes.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
 | `agentcore/agentcore_memory.py` | CDK construct for [CfnMemory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) (semantic + user preference strategies) |
-| `agentcore/agentcore_role.py` | IAM role with Bedrock, CloudWatch, XRay permissions |
+| `agentcore/agentcore_role.py` | IAM role with Bedrock, CloudWatch, XRay, and SSM read permissions (`/agentcore/*` params for cross-stack config) |
 
 ## Multimedia Processing
 

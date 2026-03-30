@@ -8,7 +8,7 @@ Three independent CDK stacks deployed in sequence, sharing configuration via SSM
 
 - **00-agent-agentcore** — Standalone AgentCore Runtime with a Strands multimodal agent + AgentCore Memory. Exports ARNs to SSM.
 - **01-whatsapp-end-user-messaging** — WhatsApp via AWS End User Messaging Social: SNS -> receiver Lambda -> DynamoDB (Stream + tumbling window) -> processor Lambda -> AgentCore.
-- **02-whatsapp-api-gateway** — WhatsApp via Meta Cloud API: API Gateway -> receiver Lambda -> DynamoDB (Stream + tumbling window) -> processor Lambda -> AgentCore.
+- **02-multichannel-api-gateway** — WhatsApp + Instagram DM via Meta Cloud API: API Gateway -> receiver Lambda (dual-channel detection) -> DynamoDB (Stream + tumbling window) -> processor Lambda -> AgentCore. Single webhook serves both platforms.
 
 Each stack has its own `app.py`, `cdk.json`, and `requirements.txt`. They are independent CDK apps, not a single multi-stack app.
 
@@ -34,7 +34,7 @@ cdk deploy
 For Stack 02, install Lambda layer dependencies before deploy:
 
 ```bash
-cd 02-whatsapp-api-gateway/layers/common
+cd 02-multichannel-api-gateway/layers/common
 pip install requests -t python/
 cd ../..
 cdk deploy
@@ -69,10 +69,38 @@ Both the LLM and video analysis model are configurable via environment variables
 
 Two IDs drive memory — they must be different strings (enforced by the SDK):
 
-- `actor_id` = `wa-user-{phone}` (padded to 33 chars) — identifies the USER. Keys long-term memory (facts, preferences) that persists across sessions.
-- `session_id` = `wa-chat-{phone}` (padded to 33 chars) — identifies the CONVERSATION. Keys short-term memory (turns) that expires per TTL (default 3 days).
+- **actor_id**: Canonical `u-user-{uuid}` from the unified users table (padded to 33 chars). Same across all channels for linked users.
+- **session_id**: Channel-specific — `wa-chat-{phone}` or `ig-chat-{sender_id}` (padded to 33 chars). Keeps conversation turns separate per channel.
 
-The architecture is multichannel: if multiple frontends generate the same `actor_id` for the same person, the agent remembers everything across all channels.
+Stack 01 (SNS) uses legacy format `wa-user-{phone}` as actor_id (no unified users table).
+
+### Unified User Identity (Stack 02)
+
+The `unified_users` DynamoDB table maps channel-specific IDs to a canonical `user_id`:
+- GSI `wa-phone-index` on `wa_phone` for WhatsApp lookups
+- GSI `ig-id-index` on `ig_id` for Instagram lookups
+- Table name exported to SSM: `/agentcore/unified_users_table_name`
+- AgentCore runtime role has read/write access
+
+The agent has a `link_account` tool that merges two user records when a user provides their other channel identity. The tool reads the table name from SSM at runtime (`ssm:GetParameter` on `/agentcore/*`). This permission is granted in `agentcore_role.py` (Stack 00) because the table is created by Stack 02 after Stack 00 deploys — SSM bridges the dependency.
+
+**Important**: When `link_account` is called from WhatsApp with an IG username, it saves `ig_username` but cannot resolve the numeric `ig_id` (only known when IG sends a webhook). The processor handles this with a fallback: if lookup by `ig_id` GSI fails, it scans by `ig_username`, finds the linked user, and backfills the `ig_id` for instant future lookups.
+
+### Memory Retrieval Config
+
+- Namespace format: `/strategies/{memoryStrategyId}/actors/{actorId}/` (NOT `/users/{actorId}/facts`)
+- Strategy IDs passed as env vars: `FACTS_STRATEGY_ID`, `PREFERENCES_STRATEGY_ID` (set at `cdk deploy` time)
+- `top_k: 20` for facts, `top_k: 10` for preferences, `relevance_score: 0.3` for both
+- The agent prompt includes explicit "Fact:" lines in responses to improve long-term memory extraction quality (AgentCore summarizes aggressively and drops structured data like IDs)
+
+### Agent Prompt Tags
+
+The processor prepends context tags to every prompt sent to AgentCore:
+- `[Channel: whatsapp|instagram]` — current channel
+- `[UserID: user-xxx]` — canonical user ID (only in Stack 02)
+- `[User: Name]` — display name from WhatsApp contact or Instagram profile
+
+The agent only offers cross-channel linking when `[UserID:]` is present.
 
 ### Multimedia Processing
 
@@ -101,7 +129,7 @@ AgentCore runs each session in an isolated microVM. Sessions stay active for up 
 
 ### SSM Parameter Sharing
 
-`get_param.py` (in stacks 01 and 02) reads SSM at CDK **synthesis** time using boto3. AWS credentials must be available when running `cdk synth/deploy`. Parameters exported by Stack 00: `/agentcore/agent_runtime_arn`, `/agentcore/s3_bucket_name`, `/agentcore/memory_id`, `/agentcore/runtime_role_arn`.
+`get_param.py` (in stacks 01 and 02) reads SSM at CDK **synthesis** time using boto3. AWS credentials must be available when running `cdk synth/deploy`. Parameters exported by Stack 00: `/agentcore/agent_runtime_arn`, `/agentcore/s3_bucket_name`, `/agentcore/memory_id`, `/agentcore/runtime_role_arn`. Stack 02 exports: `/agentcore/unified_users_table_name`.
 
 ### Agent Runtime Requirements
 
@@ -111,8 +139,32 @@ AgentCore runs each session in an isolated microVM. Sessions stay active for up 
 
 ### Stack 02 Secrets Manager
 
-Three keys in the WhatsApp secrets (no `WHATS_PHONE_ID` — phone_id comes from the webhook payload):
+**WhatsApp secret** (no `WHATS_PHONE_ID` — phone_id comes from the webhook payload):
 
 - `WHATS_VERIFICATION_TOKEN` — webhook verify token (you define it, must match Meta config)
 - `WHATS_TOKEN` — Meta Graph API access token
 - `DISPLAY_PHONE_NUMBER` — business phone number for message filtering
+
+**Instagram secret** (separate from WhatsApp — different token):
+
+- `IG_TOKEN` — Instagram API access token (generated from Meta App Dashboard > Instagram > API setup with Instagram business login)
+- `IG_ACCOUNT_ID` — Instagram Business Account ID (used to filter own messages / echo)
+- `IG_VERIFICATION_TOKEN` — webhook verify token for Instagram (you define it)
+
+### AgentCore Invocation Retry (Stack 02)
+
+The processor Lambda retries `InvokeAgentRuntime` with exponential backoff (3 attempts, base 2s) on:
+- `RuntimeClientError` (424) — runtime microVM unavailable or crashed
+- `InternalServerException` (500) — temporary, resolves with retries per AWS docs
+- `ThrottlingException` (429) — rate limit exceeded
+
+This handles cold starts after session resume (new microVM provisioning) and transient runtime errors.
+References: [InvokeAgentRuntime API](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html), [Runtime Sessions](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html).
+
+### Stack 02 Dual-Channel Webhook
+
+The receiver Lambda detects the channel from `body["object"]`:
+- `whatsapp_business_account` -> WhatsApp processing (parses `entry[].changes[].value.messages[]`)
+- `instagram` -> Instagram processing (parses `entry[].messaging[]`)
+
+Instagram messages use `from_phone = ig-{sender_id}` as DDB partition key to avoid collision with WhatsApp phone numbers. The processor reads the `channel` field from each DDB record to dispatch replies via the correct API.
