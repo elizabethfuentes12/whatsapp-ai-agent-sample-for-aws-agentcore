@@ -8,11 +8,11 @@ Process text, images, video, audio, and documents from WhatsApp using a 2-Lambda
 
 | Voice notes | Image |
 |----------|------------|
-|![Process Voice notes](./images/voice_note.gif)| ![Process image](./images/image_send.gif) |
+|![Voice notes](./images/voice-note.gif)| ![Image](./images/image-whatsapp-agent.gif) |
 
 | Video | Document |
 |--------------|--------------|
-|![Process Video](./images/video_send.gif)|![Process Documents](./images/documents.gif)|
+|![Video](./images/video-whatsapp-agent.gif)|![Document](./images/documents.gif)|
 
 ✅ **AWS Level**: Advanced - 300
 
