@@ -72,11 +72,11 @@ A runtime microVM serves several sessions, and Strands raises `ConcurrencyExcept
 
 ### Unified user identity (stack 02)
 
-`unified_users` maps channel ids to a canonical `user_id` (GSIs `wa-phone-index` and `ig-id-index`). The agent has a `link_account` tool to merge records. Stack 00's runtime role reads the table name from SSM `/agentcore/unified_users_table_name`, which stack 02 writes after stack 00 exists. When linked from WhatsApp by Instagram username, the numeric `ig_id` is unknown until Instagram sends a webhook; the processor then looks up by `ig_username` and backfills `ig_id`. `link_account` trusts identifiers typed in chat (`LINK_ALLOW_MERGE=false` disables merging).
+`unified_users` maps channel ids to a canonical `user_id` (GSIs `wa-phone-index` and `ig-id-index`). The agent has a `link_account` tool to merge records. Stack 00's runtime role reads the table name from SSM `/agentcore/unified_users_table_name`, which stack 02 writes after stack 00 exists. When linked from WhatsApp by Instagram username, the numeric `ig_id` is unknown until Instagram sends a webhook; the processor then looks up by `ig_username` and backfills `ig_id`. `link_account` acts only on the verified `user_id` from the payload (never a model argument) and refuses merges unless `LINK_ALLOW_MERGE=true`; identifiers typed in chat are still unverified.
 
 ### Prompt tags
 
-The processor starts every prompt with `[Channel: whatsapp|instagram]`, and in stack 02 `[UserID: ...]` and `[User: name]`. The agent offers account linking only when `[UserID:]` exists.
+The processor starts every prompt with `[Channel: whatsapp|instagram]`, and in stack 02 `[UserID: ...]` and `[User: name]`. The agent offers account linking only when `[UserID:]` exists, but that tag is only a hint: the tool relies on the payload `user_id`. `message_utils.neutralize_tags` strips look-alike tags from user text and profile names before the trusted tags are added; keep it in any new prompt path.
 
 ### Multimedia
 
@@ -128,4 +128,5 @@ Branch `feat/modernize-agentcore-strands` (see `docs/AUDIT.md` for the full list
 * Stack 00: Sonnet 4.6 default, Python 3.13 runtime, pinned dependencies, per-request agents, limits, optional Guardrail, tool-safety plugin, four memory strategies with namespaces, scoped IAM, media lifecycle.
 * Stacks 01 and 02: Python 3.13 arm64 Lambdas, Graph API `v25.0`, HMAC webhook verification, API Gateway hardening, durable dedupe and claims, tokens out of DynamoDB, scoped IAM, stream failure handling, deploy-time SSM resolution, offline tests.
 * Docs and repo: root `AGENTS.md` (this file) replaces the old `CLAUDE.md`, refreshed READMEs, notebooks updated and stripped of outputs, duplicate GIFs removed, `scripts/check_repo.py`.
+* Review round 1 fixes: identity binding for `link_account`, tag sanitizing, stack 01 no longer sends `runtimeUserId`, `complete()` failures after a reply are logged not raised, upgrade note about `...V2` resources.
 * Not validated against real services (no AWS account, Meta app or TwelveLabs key in the sandbox): see `docs/AUDIT.md`, section "Deferred / not validated offline".

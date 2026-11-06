@@ -86,6 +86,22 @@ def test_agent_is_built_per_request_not_shared(monkeypatch):
     assert len({id(a) for a in built}) == 3
     assert FakeSession.closed == 3  # session manager closed every time
     assert calls[0]["limits"] == {"turns": 5, "total_tokens": 1000}
+    assert "idempotency_token" not in calls[0]  # no-op with a per-request Agent
+
+
+def test_verified_user_id_travels_in_invocation_state_only(monkeypatch):
+    calls = []
+
+    class A:
+        def __call__(self, prompt, **kw):
+            calls.append(kw)
+            return FakeResult()
+
+    monkeypatch.setattr(ma, "build_agent", lambda s, r, m: A())
+    ma.run_agent(settings(), req(user_id="wa-user-1"))
+    assert calls[0]["invocation_state"] == {"verified_user_id": "wa-user-1"}
+    ma.run_agent(settings(), req())
+    assert calls[1]["invocation_state"] == {"verified_user_id": None}
 
 
 def test_limit_stop_reason_returns_fallback(monkeypatch):

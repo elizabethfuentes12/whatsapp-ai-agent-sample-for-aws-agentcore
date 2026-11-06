@@ -142,10 +142,21 @@ class AgentRequest:
     media: Optional[Dict[str, Any]] = None
     idempotency_key: Optional[str] = None
     channel: str = "unknown"
+    user_id: Optional[str] = None  # verified canonical user id sent by the Lambda (not model output)
 
 
 class PayloadError(ValueError):
     """Raised for payloads that must be rejected. ``str(error)`` is safe to show the user."""
+
+
+_USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-]{0,127}$")
+
+
+def _clean_user_id(value: Any) -> Optional[str]:
+    """Canonical user id as sent by the Lambda, or None when absent or malformed."""
+    if isinstance(value, str) and _USER_ID_PATTERN.match(value):
+        return value
+    return None
 
 
 def parse_request(payload: Any, session_id: Optional[str], header_actor_id: Optional[str]) -> AgentRequest:
@@ -190,6 +201,7 @@ def parse_request(payload: Any, session_id: Optional[str], header_actor_id: Opti
         media=media,
         idempotency_key=key,
         channel=detect_channel(prompt),
+        user_id=_clean_user_id(payload.get("user_id")),
     )
 
 

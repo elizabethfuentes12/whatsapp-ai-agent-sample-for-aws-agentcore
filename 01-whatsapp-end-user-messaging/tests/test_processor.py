@@ -142,7 +142,8 @@ def test_agentcore_payload_carries_idempotency_key_and_ids(processor_module, mon
     call = client.payloads[0]
     payload = json.loads(call["payload"])
     assert payload["idempotency_key"] == "wamid.X"
-    assert payload["actor_id"] == call["runtimeUserId"]
+    assert "runtimeUserId" not in call  # not available on every managed-runtime boto3
+    assert payload["actor_id"].startswith("wa-user-")
     assert len(call["runtimeSessionId"]) >= 33
 
 
@@ -171,3 +172,33 @@ def test_agentcore_gives_up_when_time_budget_is_gone(processor_module):
     except agentcore_service.AgentCoreUnavailable:
         pass
     assert client.payloads == []
+
+
+def test_complete_failure_after_reply_does_not_raise(processor_module, monkeypatch):
+    agent = FakeAgent()
+    _, sent = _setup(processor_module, monkeypatch, agent)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("ddb down")
+
+    monkeypatch.setattr(processor_module.idempotency, "complete", boom)
+    result = processor_module.lambda_handler({"Records": [_stream_record("1", "m1")]}, Ctx())
+    assert result["batchItemFailures"] == [] and len(sent) == 1
+
+
+def test_param_validation_error_is_logged_distinctly(processor_module, monkeypatch, caplog):
+    import agentcore_service
+    from botocore.exceptions import ParamValidationError
+
+    class Rejecting(FakeBoto):
+        def invoke_agent_runtime(self, **kwargs):
+            raise ParamValidationError(report="Unknown parameter")
+
+    service = agentcore_service.AgentCoreService("arn:agent", client=Rejecting())
+    with caplog.at_level("ERROR"):
+        try:
+            service.invoke_agent("573001234567", "hi")
+            raise AssertionError("expected AgentCoreUnavailable")
+        except agentcore_service.AgentCoreUnavailable:
+            pass
+    assert any(r.getMessage() == "agent_invoke_invalid_params" for r in caplog.records)

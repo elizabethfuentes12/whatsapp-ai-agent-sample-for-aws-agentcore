@@ -229,7 +229,15 @@ def _process_sender(sender_key, messages, seconds_left=None):
             idempotency.release(table, message)
         raise
     for message in claimed:
-        idempotency.complete(table, message)
+        try:
+            idempotency.complete(table, message)
+        except Exception as error:  # noqa: BLE001
+            # The reply is already sent. Raising would make the stream retry the batch,
+            # and the claim would eventually expire and produce a duplicate reply.
+            logger.error(
+                "idempotency_complete_failed",
+                extra={"fields": {"error_type": type(error).__name__}},
+            )
 
 
 def _reply_target(sender_key, last_msg):
@@ -267,7 +275,7 @@ def _handle_claimed(sender_key, messages, seconds_left):
     def ask(prompt, agent_media=None):
         return _agent().invoke(
             actor_id, session_id, prompt, media=agent_media,
-            message_id=last_message_id, seconds_left=seconds_left,
+            message_id=last_message_id, seconds_left=seconds_left, user_id=canonical_user_id,
         )
 
     transcript_text = None

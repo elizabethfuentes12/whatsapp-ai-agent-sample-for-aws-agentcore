@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from collections import defaultdict
 
 MAX_ID_LENGTH = 128  # agent side limit for idempotency_key
@@ -54,11 +55,29 @@ def aggregate_messages(messages):
     return "\n".join(texts), media
 
 
+_TAG_PATTERN = re.compile(r"\[\s*(?:channel|user|userid|user_id|videoid|video)\s*[:=][^\]]*\]?", re.IGNORECASE)
+
+
+def neutralize_tags(text: str) -> str:
+    """Strip look-alike `[Channel: ..]`, `[UserID: ..]`, `[User: ..]` tags from untrusted text.
+
+    The Lambda prefixes trusted tags to the user's message. Without this, a user
+    could type their own tag and impersonate another identity or channel.
+    """
+    previous = None
+    while previous != text:  # repeat so nested fragments cannot rebuild a tag
+        previous = text
+        text = _TAG_PATTERN.sub("", text)
+    return text
+
+
 def build_tagged_prompt(text: str, contact_name: str = "") -> str:
     """Prefix the tags the agent reads (`[Channel: ...]`, `[User: ...]`)."""
     tags = "[Channel: whatsapp]"
+    contact_name = neutralize_tags(contact_name or "").replace("\n", " ").strip()[:80]
     if contact_name:
         tags += f" [User: {contact_name}]"
+    text = neutralize_tags(text or "")
     return f"{tags} {text}" if text else tags
 
 

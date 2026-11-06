@@ -55,7 +55,7 @@ CDK context options (`-c key=value`): `model_id`, `memory_expiry_days` (3 to 365
 Pinned in `agent_files/requirements.txt` (runtime zip) and `requirements.txt` (CDK). Versions come from `docs/AUDIT.md` section 3.
 
 Runtime environment variables set by the stack: `AWS_REGION`, `MODEL_ID`, `BEDROCK_AGENTCORE_MEMORY_ID`, `S3_BUCKET`, `TL_SECRET_ARN`, `TL_MODEL_NAME`, optional `BEDROCK_GUARDRAIL_ID`/`BEDROCK_GUARDRAIL_VERSION`, `UNIFIED_TRACES_DESTINATION_ENABLED`.
-Optional agent tuning (set manually or via a new `environment_variables` entry): `ENABLE_PROMPT_CACHING` (default true), `AGENT_MAX_TURNS` (12), `AGENT_MAX_TOTAL_TOKENS` (200000), `AGENT_WINDOW_SIZE` (40), `LOG_LEVEL`, `LINK_ALLOW_MERGE` (true), `TL_INDEXING_TIMEOUT_SECONDS` (540).
+Optional agent tuning (set manually or via a new `environment_variables` entry): `ENABLE_PROMPT_CACHING` (default true), `AGENT_MAX_TURNS` (12), `AGENT_MAX_TOTAL_TOKENS` (200000), `AGENT_WINDOW_SIZE` (40), `LOG_LEVEL`, `LINK_ALLOW_MERGE` (false), `TL_INDEXING_TIMEOUT_SECONDS` (540).
 
 Accounts: Bedrock model access for the chosen model, CDK bootstrap, optional TwelveLabs API key. For traces, enable CloudWatch Transaction Search once per account ([docs](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)).
 
@@ -70,9 +70,10 @@ Accounts: Bedrock model access for the chosen model, CDK bootstrap, optional Twe
 * IAM: no `Resource: "*"` except X-Ray write and `cloudwatch:PutMetricData` with the `bedrock-agentcore` namespace condition (neither supports resource scoping). Bedrock inference profiles need the foundation model ARN with a Region wildcard (documented requirement).
 * Changing anything in `agent_files/*.py`, `requirements.txt` or `create_deployment_package.sh` triggers an automatic zip rebuild (hash in `agent_files/deployment_package.sha256`). The generated zip, `deployment_package/` and the hash file are git-ignored.
 * Do not add `bedrock-agentcore-starter-toolkit` to the runtime requirements (it is a CLI).
-* `link_account` trusts identifiers typed in chat. For production add out-of-band verification, or set `LINK_ALLOW_MERGE=false`.
+* `link_account` takes no user argument from the model: the acting user is the verified `user_id` the Lambda puts in the payload, passed to the tool through `invocation_state` (`ToolContext`). It fails closed when missing. Identifiers typed in chat are still unverified, so merging is off by default (`LINK_ALLOW_MERGE=true` to enable) and real use needs out-of-band verification.
+* Do not pass `idempotency_token` to the agent: a new `Agent` is built per request, so it would do nothing. `RecentResultCache` dedupes retries.
 
 ## Current state
 
-Modernized in FEAT-002 (see `docs/AUDIT.md`): Sonnet 4.6 default, Python 3.13 runtime, pinned dependencies, per-request agents with explicit conversation manager, limits, prompt caching, optional Guardrail, tool-safety plugin, JSON logs and trace attributes, summary and episodic memory with namespaces, 30 day event expiry, scoped IAM with confused-deputy conditions, request header allowlist, media lifecycle rules, generated TwelveLabs placeholder secret, and 76 offline tests.
+Modernized in FEAT-002 (see `docs/AUDIT.md`): Sonnet 4.6 default, Python 3.13 runtime, pinned dependencies, per-request agents with explicit conversation manager, limits, prompt caching, optional Guardrail, tool-safety plugin, JSON logs and trace attributes, summary and episodic memory with namespaces, 30 day event expiry, scoped IAM with confused-deputy conditions, request header allowlist, media lifecycle rules, generated TwelveLabs placeholder secret, and offline tests. Review round 1: `link_account` no longer trusts a model-supplied user id, merge default off, `idempotency_token` removed.
 Not changed on purpose: PUBLIC network mode with SigV4 (server to server invocation), no Gateway/Identity/Evaluations resources (listed as next steps in the audit).

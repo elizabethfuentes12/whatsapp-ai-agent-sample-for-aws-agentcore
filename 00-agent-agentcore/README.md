@@ -102,7 +102,7 @@ CDK context, passed as `cdk deploy -c key=value`:
 | `media_retention_days` | 30 | Expiration of media prefixes in the bucket |
 | `package_path` | built | Prebuilt deployment zip |
 
-Runtime environment variables set by the stack: `AWS_REGION`, `MODEL_ID`, `BEDROCK_AGENTCORE_MEMORY_ID`, `S3_BUCKET`, `TL_SECRET_ARN`, `TL_MODEL_NAME` (default `pegasus1.2`), and the optional Guardrail and traces values. Optional tuning (not set by default): `ENABLE_PROMPT_CACHING` (true), `AGENT_MAX_TURNS` (12), `AGENT_MAX_TOTAL_TOKENS` (200000), `AGENT_WINDOW_SIZE` (40), `LINK_ALLOW_MERGE` (true), `LOG_LEVEL`.
+Runtime environment variables set by the stack: `AWS_REGION`, `MODEL_ID`, `BEDROCK_AGENTCORE_MEMORY_ID`, `S3_BUCKET`, `TL_SECRET_ARN`, `TL_MODEL_NAME` (default `pegasus1.2`), and the optional Guardrail and traces values. Optional tuning (not set by default): `ENABLE_PROMPT_CACHING` (true), `AGENT_MAX_TURNS` (12), `AGENT_MAX_TOTAL_TOKENS` (200000), `AGENT_WINDOW_SIZE` (40), `LINK_ALLOW_MERGE` (false), `LOG_LEVEL`.
 
 ## How is the payload structured?
 

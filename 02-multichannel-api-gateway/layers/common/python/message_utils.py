@@ -85,13 +85,31 @@ def aggregate_messages(messages):
     return "\n".join(texts), media
 
 
+_TAG_PATTERN = re.compile(r"\[\s*(?:channel|user|userid|user_id|videoid|video)\s*[:=][^\]]*\]?", re.IGNORECASE)
+
+
+def neutralize_tags(text: str) -> str:
+    """Strip look-alike `[Channel: ..]`, `[UserID: ..]`, `[User: ..]` tags from untrusted text.
+
+    The Lambda prefixes trusted tags to the user's message. Without this, a user
+    could type their own tag and impersonate another identity or channel.
+    """
+    previous = None
+    while previous != text:  # repeat so nested fragments cannot rebuild a tag
+        previous = text
+        text = _TAG_PATTERN.sub("", text)
+    return text
+
+
 def build_tagged_prompt(text: str, contact_name: str = "", channel: str = "whatsapp", user_id: str = "") -> str:
     """Prefix the tags the agent reads (`[Channel: ...]`, `[UserID: ...]`, `[User: ...]`)."""
     tags = f"[Channel: {channel}]"
     if user_id:
         tags += f" [UserID: {user_id}]"
+    contact_name = neutralize_tags(contact_name or "").replace("\n", " ").strip()[:80]
     if contact_name:
         tags += f" [User: {contact_name}]"
+    text = neutralize_tags(text or "")
     return f"{tags} {text}" if text else tags
 
 

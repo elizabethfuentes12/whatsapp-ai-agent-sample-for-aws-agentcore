@@ -7,6 +7,7 @@ from contextvars import ContextVar
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ParamValidationError
 
 from message_utils import actor_id_for, idempotency_key_for, session_id_for
 from safe_logging import mask_phone
@@ -99,7 +100,6 @@ class AgentCoreService:
                     response = self.client.invoke_agent_runtime(
                         agentRuntimeArn=self.agent_arn,
                         runtimeSessionId=session_id,
-                        runtimeUserId=actor_id,
                         payload=payload,
                     )
                     return self._read_response(response)
@@ -110,6 +110,10 @@ class AgentCoreService:
                     )
                     if attempt + 1 < MAX_ATTEMPTS:
                         time.sleep(RETRY_BASE_DELAY * (2 ** attempt))
+                except ParamValidationError as error:
+                    # The managed-runtime boto3 rejected a parameter: a packaging problem, not an outage.
+                    logger.error("agent_invoke_invalid_params", extra={"fields": {"error": str(error)[:200]}})
+                    break
                 except Exception as error:  # read timeout, connection error
                     logger.error("agent_invoke_failed", extra={"fields": {"error_type": type(error).__name__}})
                     break

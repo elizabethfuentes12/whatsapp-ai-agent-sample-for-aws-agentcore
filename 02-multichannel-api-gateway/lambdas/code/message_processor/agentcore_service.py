@@ -52,7 +52,7 @@ class AgentCoreService:
         except AttributeError:  # test doubles
             pass
 
-    def invoke(self, actor_id, session_id, prompt, media=None, message_id="", seconds_left=None):
+    def invoke(self, actor_id, session_id, prompt, media=None, message_id="", seconds_left=None, user_id=None):
         """Invoke the runtime with text and optional media.
 
         Retries InternalServerException, RuntimeClientError (424, cold starts) and
@@ -64,6 +64,10 @@ class AgentCoreService:
             AgentCoreUnavailable: after the attempts or the time budget run out.
         """
         payload_data = {"prompt": prompt.strip(), "actor_id": actor_id}
+        if user_id:
+            # Verified canonical id (from the users table). The agent's link_account tool
+            # uses this instead of anything the model or the user says.
+            payload_data["user_id"] = user_id
         if message_id:
             payload_data["idempotency_key"] = idempotency_key_for(message_id)
         if media:

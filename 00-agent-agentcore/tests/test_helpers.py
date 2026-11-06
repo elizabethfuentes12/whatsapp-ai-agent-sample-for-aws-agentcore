@@ -179,3 +179,10 @@ def test_json_formatter_includes_fields_and_redacts_exceptions():
     data = json.loads(JsonFormatter().format(record))
     assert data["tool"] == "video_analysis"
     assert "secret-bucket" not in data["exception"]
+
+
+def test_parse_request_keeps_only_well_formed_user_id():
+    assert parse_request({"prompt": "x", "user_id": "wa-user-5730012"}, None, None).user_id == "wa-user-5730012"
+    assert parse_request({"prompt": "x", "user_id": "bad id!"}, None, None).user_id is None
+    assert parse_request({"prompt": "x", "user_id": 5}, None, None).user_id is None
+    assert parse_request({"prompt": "x"}, None, None).user_id is None

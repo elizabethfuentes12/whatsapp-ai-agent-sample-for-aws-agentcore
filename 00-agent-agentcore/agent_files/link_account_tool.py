@@ -1,10 +1,15 @@
 """Tool to link WhatsApp and Instagram accounts for cross-channel memory.
 
-Security note: the identifier comes from what the user types in chat and is not
-verified. Anyone can claim a phone number or username. Set
-``LINK_ALLOW_MERGE=false`` to refuse merging with an identity that already has
-its own record, and add an out-of-band verification step before using this in
-production (see the AGENTS.md of this stack).
+Security notes:
+
+* The acting user is NEVER taken from model output. It comes from the verified
+  ``user_id`` the message-processor Lambda sends in the invocation payload and
+  that the agent entrypoint passes through ``invocation_state``. The tool fails
+  closed when it is missing.
+* The identifier to link comes from what the user types in chat and is not
+  verified. Merging with an existing record is refused by default
+  (``LINK_ALLOW_MERGE`` must be set to ``true`` explicitly). Add an out-of-band
+  verification step before using this in production (see AGENTS.md).
 """
 
 import logging
@@ -16,13 +21,13 @@ from typing import Dict, Optional, Tuple
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.config import Config
-from strands import tool
+from strands import ToolContext, tool
 
 logger = logging.getLogger(__name__)
 
 REGION = os.getenv("AWS_REGION", "us-east-1")
 TABLE_NAME_PARAMETER = "/agentcore/unified_users_table_name"
-ALLOW_MERGE = os.getenv("LINK_ALLOW_MERGE", "true").lower() != "false"
+ALLOW_MERGE = os.getenv("LINK_ALLOW_MERGE", "false").lower() == "true"
 MAX_SCAN_PAGES = 20  # bounds the ig_username scan (no GSI on that attribute)
 
 _BOTO_CONFIG = Config(connect_timeout=3, read_timeout=5, retries={"max_attempts": 3, "mode": "standard"})
@@ -94,22 +99,26 @@ def _find_other_user(table, channel: str, identifier: str) -> Optional[dict]:
     return None
 
 
-@tool
+VERIFIED_USER_KEY = "verified_user_id"
+
+
+@tool(context=True)
 def link_account(
-    current_user_id: str,
     link_channel: str,
     link_identifier: str,
+    tool_context: ToolContext,
 ) -> Dict:
     """Link a WhatsApp phone number or Instagram username to the current user
     for cross-channel personalized experience.
 
     Args:
-        current_user_id: The current user's canonical ID (from the [UserID:] tag in the prompt).
         link_channel: The OTHER channel to link. Must be "whatsapp" or "instagram".
         link_identifier: The identifier on the other channel:
             - For whatsapp: phone number with country code (e.g. "5491155001234")
             - For instagram: Instagram username without @ (e.g. "maria_dev")
     """
+    # The acting user comes from the verified request, never from the model.
+    current_user_id = (tool_context.invocation_state or {}).get(VERIFIED_USER_KEY)
     if not isinstance(current_user_id, str) or not _USER_ID_PATTERN.match(current_user_id):
         return {"status": "error", "message": "Current user not found."}
 

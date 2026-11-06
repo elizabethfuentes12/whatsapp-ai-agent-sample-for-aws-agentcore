@@ -155,12 +155,34 @@ class FakeTable:
         self.users.pop(Key["user_id"], None)
 
 
+class FakeToolContext:
+    def __init__(self, user):
+        self.invocation_state = {link.VERIFIED_USER_KEY: user} if user is not None else {}
+
+
 def run_link(table, channel, ident, user="user-1"):
     link._table = table
     try:
-        return link.link_account(current_user_id=user, link_channel=channel, link_identifier=ident)
+        return link.link_account(
+            link_channel=channel, link_identifier=ident, tool_context=FakeToolContext(user)
+        )
     finally:
         link._table = None
+
+
+def test_link_fails_closed_without_verified_user():
+    table = FakeTable([{"user_id": "user-1"}])
+    assert run_link(table, "whatsapp", "573001234567", user=None)["status"] == "error"
+    assert "wa_phone" not in table.users["user-1"]
+
+
+def test_link_has_no_model_supplied_user_argument():
+    props = link.link_account.tool_spec["inputSchema"]["json"]["properties"]
+    assert set(props) == {"link_channel", "link_identifier"}
+
+
+def test_link_merge_is_off_by_default():
+    assert link.ALLOW_MERGE is False
 
 
 def test_link_validates_inputs_before_touching_dynamodb():
@@ -191,6 +213,12 @@ def test_link_registers_new_identifier(monkeypatch):
     out = run_link(table, "whatsapp", "573001234567")
     assert out["status"] == "linked"
     assert table.users["user-1"]["wa_phone"] == "573001234567"
+
+
+def test_link_never_touches_other_users_record():
+    table = FakeTable([{"user_id": "user-1"}, {"user_id": "user-victim", "wa_phone": "111111111"}])
+    run_link(table, "whatsapp", "573001234567", user="user-1")
+    assert table.users["user-victim"]["wa_phone"] == "111111111"
 
 
 def test_link_unknown_current_user():

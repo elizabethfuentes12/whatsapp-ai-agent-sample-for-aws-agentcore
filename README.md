@@ -145,7 +145,8 @@ The runtime sends OpenTelemetry data through the AWS Distro for OpenTelemetry an
 - **Invalid content in memory is permanent**: it cannot be deleted per record, so all media is validated before it reaches the agent.
 - **One call per agent instance**: Strands raises `ConcurrencyException` on overlapping calls. The runtime builds one agent per request to avoid it.
 - **Session caching**: a microVM keeps state for up to 8 hours or 15 idle minutes. If you delete rows from the users table while testing, use a new `session_id`.
-- **Account linking trusts chat input**: the `link_account` tool accepts identifiers typed by the user. Set `LINK_ALLOW_MERGE=false` on the runtime or add out-of-band verification before real use.
+- **Account linking trusts the identifier typed in chat**: the acting user is bound to the verified sender (the model cannot choose it) and merging with an existing record is off by default (`LINK_ALLOW_MERGE=true` turns it on). A user can still claim someone else's phone number or username as an identifier, so add out-of-band verification before real use.
+- **Upgrading from the original sample**: the memory and runtime names changed to `...V2`, so CloudFormation creates new resources. Existing AgentCore Memory data is not carried over to the new memory; users start with empty long-term memory. Export anything you need first, and delete the old resources after you verify the new ones.
 - **Public runtime endpoint with SigV4**: the runtime uses PUBLIC network mode with IAM authentication, called only by your Lambdas. Use VPC mode if you need private networking.
 
 ## What was not validated?
