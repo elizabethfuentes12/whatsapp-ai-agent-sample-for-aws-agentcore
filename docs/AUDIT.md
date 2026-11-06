@@ -3,7 +3,7 @@
 Audit date: 2026-11-06 (sandbox clock). Branch: `feat/modernize-agentcore-strands` (base `main` @ `00fde04`).
 Scope: `00-agent-agentcore`, `01-whatsapp-end-user-messaging`, `02-multichannel-api-gateway`, `notebook/`, root docs.
 
-Every "Reference" below is a page that was fetched live during this audit (not recalled from memory). Status values: `todo` (to be done in FEAT-002..004), `info` (no change needed, recorded for context).
+Every "Reference" below is a page that was fetched live during this audit (not recalled from memory). Status values: `done`, `deferred` (not done, with the reason in section 11), `info` (no change needed, recorded for context).
 
 Owner features: FEAT-002 = stack 00 (agent + AgentCore infra), FEAT-003 = stacks 01 and 02, FEAT-004 = docs, notebooks, tests, repo hygiene.
 
@@ -87,7 +87,7 @@ Severity: **Critical** (breaks or exposes today), **High**, **Medium**, **Low**.
 | S-08 | Streaming entrypoint | `invoke` is sync and returns `str(result)` (includes repr noise for non-text blocks). | [Strands on AgentCore: streaming example](https://strandsagents.com/latest/documentation/docs/user-guide/deploy/deploy_to_bedrock_agentcore/python/) | Low | Return `result.message` text; keep sync (callers read a full reply for WhatsApp) but extract text blocks explicitly. | done (FEAT-002) |
 | S-09 | Observability | `strands-agents[otel]` and `aws-opentelemetry-distro` listed but no explicit wiring or span attributes (actor, session, channel). | [Strands traces](https://strandsagents.com/latest/documentation/docs/user-guide/observability-evaluation/traces/), [AgentCore observability](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability.html) | Medium | Document and enable AgentCore Observability (CloudWatch GenAI dashboard, Transaction Search); set `trace_attributes` with channel/session; ensure the execution role can write logs/spans; run entrypoint via `opentelemetry-instrument` where applicable. | done (FEAT-002) |
 | S-10 | Model config | `BedrockModel(model_id=...)` only. | [Strands Bedrock provider](https://strandsagents.com/latest/documentation/docs/user-guide/concepts/model-providers/amazon-bedrock/) (guardrails, prompt caching supported) | Medium | Expose optional `BEDROCK_GUARDRAIL_ID/VERSION` and prompt caching of the (long) system prompt via env flags; default off for guardrail, on for caching where the model supports it (min 1,024 tokens on Sonnet 4.6). | done (FEAT-002) |
-| S-11 | Payload media limits | `MAX_MEDIA_BYTES = 1.5 MB` compares the length of the base64 string, not decoded bytes; message says "under 1.5 MB". | repo code | Low | Compare decoded size or fix the message; add unit tests for `_sanitize_document_name`, `_validate_media`, `build_multimodal_prompt`. | done (FEAT-002); tests for 01/02 logic FEAT-004 |
+| S-11 | Payload media limits | `MAX_MEDIA_BYTES = 1.5 MB` compares the length of the base64 string, not decoded bytes; message says "under 1.5 MB". | repo code | Low | Compare decoded size or fix the message; add unit tests for `_sanitize_document_name`, `_validate_media`, `build_multimodal_prompt`. | done: stack 00 (FEAT-002); the 01/02 size checks and their tests are in FEAT-003 |
 
 ### 4.3 AgentCore (infrastructure and platform use)
 
@@ -127,10 +127,10 @@ Severity: **Critical** (breaks or exposes today), **High**, **Medium**, **Low**.
 |---|---|---|---|---|---|---|
 | D-01 | DynamoDB | `RemovalPolicy.DESTROY` everywhere, no PITR or deletion protection on `unified_users`, default AWS-owned key. | repo code | Medium | Keep DESTROY by default for a sample (documented), but add context flag `retain_data=true` that switches to RETAIN + PITR; enable PITR on users table by default. | done (FEAT-003): SSE (AWS managed key) on all tables, PITR always on the users table, `-c retain_data=true` switches tables and bucket to RETAIN with deletion protection; message buffer tables have no PITR (transient data, 48 h TTL) unless `retain_data` |
 | D-02 | S3 buckets | Versioned, SSL enforced, block public: good. No lifecycle rule on media; `auto_delete_objects`. | repo code | Low | Add a 30-day expiration lifecycle for `images/`, `voice/`, `video/`, `documents/` prefixes (media is ephemeral by design). | done: stack 00 (FEAT-002); stacks 01 and 02 (FEAT-003): 30 day expiration per media prefix, 1 day for noncurrent versions, abort incomplete uploads, S3 managed encryption |
-| D-03 | Committed binaries | 12 GIFs (up to 15 MB each, ~50 MB duplicated across root, 01 and 02) and `notebook/test_agentcore_deployed_executed.ipynb` (executed outputs) are tracked. | repo `git ls-files` | Medium | Remove the `_executed` notebook and ignore `*_executed.ipynb`; dedupe GIFs by keeping one copy and linking; do not rewrite history. | todo (FEAT-004) |
-| D-04 | Docs staleness | `CLAUDE.md` is the only agent guide; no `AGENTS.md` at any level. READMEs mention the EOL model and wrong model ID example. | `ls`, repo docs | Medium | Create `AGENTS.md` at root, 00, 01, 02; make `CLAUDE.md` a pointer/symlink; refresh READMEs with TRK links and new versions. | todo (FEAT-004) |
-| D-05 | Tests | None. | `find . -name "test*"` | High | Add pytest for: signature verification, 33-char id padding, message grouping, `_sanitize_document_name`, `_validate_media`, `build_multimodal_prompt`; CDK assertion tests per stack (runtime enum, arm64, throttling, no `*` on invoke). | partial: stack 00 (FEAT-002); stacks 01 (41 tests) and 02 (72 tests) done in FEAT-003; root checks FEAT-004 |
-| D-06 | Notebooks | `test_agentcore_deployed.ipynb` and `test_multimodal_agent.ipynb` reference the old model and API usage. | repo notebooks | Low | Update model/version, validate with `nbformat`; strip outputs. | todo (FEAT-004) |
+| D-03 | Committed binaries | 12 GIFs (up to 15 MB each, ~50 MB duplicated across root, 01 and 02) and `notebook/test_agentcore_deployed_executed.ipynb` (executed outputs) are tracked. | repo `git ls-files` | Medium | Remove the `_executed` notebook and ignore `*_executed.ipynb`; dedupe GIFs by keeping one copy and linking; do not rewrite history. | done (FEAT-004): `test_agentcore_deployed_executed.ipynb` removed and `*_executed.ipynb` ignored; seven byte-identical GIF copies in stacks 01 and 02 removed (`git rm`), READMEs now link `../images/`; history not rewritten, so the old blobs remain in `.git` |
+| D-04 | Docs staleness | `CLAUDE.md` is the only agent guide; no `AGENTS.md` at any level. READMEs mention the EOL model and wrong model ID example. | `ls`, repo docs | Medium | Create `AGENTS.md` at root, 00, 01, 02; make `CLAUDE.md` a pointer/symlink; refresh READMEs with TRK links and new versions. | done (FEAT-004): root `AGENTS.md` (merged from `CLAUDE.md`, corrected for the new design) plus the per-stack files; `CLAUDE.md` is a symlink to `AGENTS.md`; root and stack READMEs and the notebook README rewritten against the code |
+| D-05 | Tests | None. | `find . -name "test*"` | High | Add pytest for: signature verification, 33-char id padding, message grouping, `_sanitize_document_name`, `_validate_media`, `build_multimodal_prompt`; CDK assertion tests per stack (runtime enum, arm64, throttling, no `*` on invoke). | done: stack 00 (76 tests, FEAT-002), stack 01 (41) and stack 02 (72) in FEAT-003, root hygiene check `scripts/check_repo.py` (FEAT-004) |
+| D-06 | Notebooks | `test_agentcore_deployed.ipynb` and `test_multimodal_agent.ipynb` reference the old model and API usage. | repo notebooks | Low | Update model/version, validate with `nbformat`; strip outputs. | done (FEAT-004): both notebooks rewritten (current model through the shared code, public `bedrock-agentcore` boto3 client, `RetrieveMemoryRecords`, idempotency key, payload limits), outputs stripped, validated with `nbformat`; AWS-calling cells not run live |
 
 ## 5. Documentation checked (live)
 
@@ -177,7 +177,7 @@ Chosen: `v25.0`.
 
 1. FEAT-002 (stack 00): A-01, A-02, A-04, A-06, S-01..S-11, C-02..C-11, D-02 (00 part), tests, `AGENTS.md`.
 2. FEAT-003 (stacks 01, 02): A-03, A-05, W-01..W-11, D-01, D-02, tests, `AGENTS.md`.
-3. FEAT-004 (root, notebooks): D-03..D-06, README refresh with TRK links, merge `CLAUDE.md` into `AGENTS.md`, final verification.
+3. FEAT-004 (root, notebooks): D-03..D-06, README refresh with TRK links, merge `CLAUDE.md` into `AGENTS.md`, final verification (done, see section 10).
 
 ## 8. FEAT-002 implementation notes (stack 00)
 
@@ -207,3 +207,36 @@ Findings and deviations:
 * Message age limit for webhook messages is 15 minutes (was 5) so that short Meta retries are not dropped.
 * Layer build: `layers/build_layer.sh` needs `uv` and network access at synth; use `-c layer_path=layers/common` to skip it (tests do).
 
+## 10. FEAT-004 implementation notes (docs, notebooks, hygiene)
+
+* Root `AGENTS.md` replaces `CLAUDE.md` (now a symlink). The old text was not copied verbatim: it described the removed strategy-ID namespaces, synth-time SSM reads, a runtime `bedrock-agentcore-starter-toolkit` requirement, `python3.11` and the stale model, so those sections were rewritten from the code.
+* Corrections found while rewriting the READMEs: the buffer window is 20 seconds in stack 01 but **10 seconds** in stack 02 (the old text said 20 for both); stack 02 needs no manual layer step any more; the old `README` model example ID did not exist; the "75% savings" figure is the reference project's number, not a measurement of this sample, and is worded that way now.
+* GIFs: instead of rewriting history, one copy lives in `images/` and the stack READMEs link `../images/`. `01-whatsapp-end-user-messaging/images/documents.gif` and the Instagram-specific media stay where they are. Cloning still downloads the old blobs from history.
+* `scripts/check_repo.py` (standard library only, no credentials) checks tracked files for unresolved placeholders (`TODO`, `FIXME`, `TBD`, `XXX`, `REPLACE_ME`, `INSERT HERE`), TRK parameters on AWS, Strands and Kiro links in READMEs and `AGENTS.md`, em dashes in those docs, the retired model ID, the Contributing/Security/License sections, and stored notebook outputs. `CHANGE_ME` is intentionally not flagged: it is the runtime marker for unconfigured secrets.
+
+Final verification (sandbox, fake credentials): `pytest` passes in all three stacks (76, 41 and 72 tests), `cdk synth` succeeds for all three, `python scripts/check_repo.py` passes, both notebooks pass `nbformat.validate`.
+
+## 11. Deferred / not validated offline
+
+The sandbox has no AWS account, Meta app, WhatsApp number or TwelveLabs key, so the following were verified by reading documentation and by tests that mock the boundary, never against the real service.
+
+| Item | Status | Why |
+|------|--------|-----|
+| Deploying the three stacks | not validated | Needs an account. Only `cdk synth` and CloudFormation-level assertions ran. |
+| Python 3.13 zip starting on AgentCore Runtime within the initialization window | not validated | Built for `aarch64-manylinux2014`, but never started on the service. |
+| Bedrock invocation of `global.anthropic.claude-sonnet-4-6`, prompt caching `CacheConfig(strategy="auto")`, Guardrail wiring | not validated | Model access and a live call are required. Signatures were checked against the installed `strands-agents` 1.64.0. |
+| AgentCore Memory: four strategies, namespace templates, episodic reflection, retrieval | not validated | The `CfnMemory` properties synthesize, but extraction quality and namespace matching need a live memory. |
+| Notebook cells that call AWS | not validated | Offline cells were executed; the rest were checked against the boto3 1.43 service model (parameter names) only. |
+| `X-Hub-Signature-256` with real Meta traffic | not validated | Tested with signatures computed in the tests. Instagram and WhatsApp payload shapes follow Meta's documentation. |
+| End User Messaging Social `metaApiVersion` values | not validated | The documentation page listing supported versions was truncated during the audit. `v25.0` is the default; override with `-c meta_api_version=`. |
+| `aws:SourceArn` condition on the SNS topic policy | deferred | Opt in through `topic_source_arn_pattern` because it could not be confirmed that the service always sends that key. |
+| TwelveLabs indexing and analysis | not validated | Needs an API key; the tool is tested with mocks. |
+| Amazon Transcribe, S3 presigned URLs, DynamoDB stream tumbling window timing | not validated | Behavior is covered by unit tests with fakes; real latency and window delivery were not observed. |
+| Throttle defaults, reserved concurrency, cost and savings from buffering | not validated | Sizing needs real traffic. The reference project's 4:1 ratio is cited, not reproduced. |
+| CloudWatch Transaction Search and `UNIFIED_TRACES_DESTINATION_ENABLED` behavior | not validated | Account-level setting; documented in the READMEs. |
+| Account linking verification | deferred | `link_account` still trusts identifiers typed in chat. `LINK_ALLOW_MERGE=false` disables merging. A real verification step (for example a code sent on the other channel) is out of scope for this sample. |
+| AgentCore Gateway, Identity, Policy and Evaluations | deferred | Added value, not required for the sample; described as next steps in the READMEs. The video tool and `link_account` would be the first Gateway candidates. |
+| Streaming responses (`S-08`) over WhatsApp | deferred | Messaging channels need the full reply; the entrypoint stays non-streaming. |
+| VPC network mode for the runtime, WAF on by default, mTLS for the Meta webhook | deferred | Each changes the deployment prerequisites. WAF is available with `-c enable_waf=true`. |
+| Repository size | deferred | Old GIF blobs stay in history because history is not rewritten. |
+| Sonnet 5.5 as default | deferred | Documented as opt in: adaptive thinking is on by default and thinking blocks are tied to the account, which changes latency and behavior. |
