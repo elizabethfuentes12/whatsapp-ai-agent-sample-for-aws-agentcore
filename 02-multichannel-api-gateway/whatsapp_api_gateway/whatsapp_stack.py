@@ -1,10 +1,14 @@
 """CDK Stack for WhatsApp + Instagram integration via API Gateway + Meta Cloud API.
 
-Reads AgentCore Runtime ARN from SSM Parameter Store (deployed by 00-agent-agentcore).
-Supports dual-channel: WhatsApp Business and Instagram Direct Messages.
+Reads the AgentCore Runtime ARN from SSM Parameter Store (deployed by 00-agent-agentcore).
+The parameters are resolved by CloudFormation at deploy time, so `cdk synth` works without
+AWS credentials. Supports dual-channel: WhatsApp Business and Instagram Direct Messages.
 """
 
+import json
+
 from aws_cdk import (
+    Duration,
     Stack,
     CfnOutput,
     RemovalPolicy,
@@ -12,19 +16,27 @@ from aws_cdk import (
     aws_iam as iam,
     aws_secretsmanager as secretsmanager,
     aws_ssm as ssm,
-    SecretValue,
 )
 from constructs import Construct
 
-from get_param import get_string_param
 from databases.databases import MessageDatabase, UserIdentityDatabase
 from layers.project_layers import ProjectLayers
 from lambdas.project_lambdas import ProjectLambdas
 from apis.webhooks import WebhookApi
+from whatsapp_api_gateway.config import (
+    DEFAULT_MEDIA_RETENTION_DAYS,
+    DEFAULT_THROTTLE_BURST,
+    DEFAULT_THROTTLE_RATE,
+    GRAPH_API_VERSION,
+    is_true,
+    optional_int,
+)
 
-# Read AgentCore config from SSM (set by 00-agent-agentcore stack)
-AGENT_RUNTIME_ARN = get_string_param("/agentcore/agent_runtime_arn")
-RUNTIME_ROLE_ARN = get_string_param("/agentcore/runtime_role_arn")
+MEDIA_PREFIXES = (
+    "images/", "audio/", "video/", "documents/",
+    "ig-images/", "ig-audios/", "ig-videos/", "ig-documents/",
+    "transcriptions/",
+)
 
 
 class WhatsAppApiGatewayStack(Stack):
@@ -33,38 +45,53 @@ class WhatsAppApiGatewayStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # --- Secrets Manager for WhatsApp credentials ---
+        ctx = self.node.try_get_context
+        retain_data = is_true(ctx("retain_data"))
+        retention_days = optional_int(ctx("media_retention_days")) or DEFAULT_MEDIA_RETENTION_DAYS
+        graph_api_version = ctx("graph_api_version") or GRAPH_API_VERSION
+        enable_waf = is_true(ctx("enable_waf"))
+
+        # --- AgentCore config from 00-agent-agentcore (resolved by CloudFormation at deploy time) ---
+        agent_runtime_arn = ssm.StringParameter.value_for_string_parameter(
+            self, "/agentcore/agent_runtime_arn"
+        )
+        runtime_role_arn = ssm.StringParameter.value_for_string_parameter(
+            self, "/agentcore/runtime_role_arn"
+        )
+
+        # --- Secrets Manager: Meta credentials ---
+        # The *_APP_SECRET keys are generated randomly, so an unconfigured deployment can
+        # never verify a signature. Replace them with the real app secrets from the Meta
+        # App Dashboard (App settings > Basic > App secret).
         secrets = secretsmanager.Secret(
             self,
             "WhatsAppSecrets",
-            secret_object_value={
-                "WHATS_VERIFICATION_TOKEN": SecretValue.unsafe_plain_text(
-                    "CHANGE_ME_VERIFICATION_TOKEN"
-                ),
-                "WHATS_TOKEN": SecretValue.unsafe_plain_text(
-                    "CHANGE_ME_TOKEN"
-                ),
-                "DISPLAY_PHONE_NUMBER": SecretValue.unsafe_plain_text(
-                    "CHANGE_ME_PHONE_NUMBER"
-                ),
-            },
+            description="WhatsApp Cloud API credentials. Replace the CHANGE_ME values.",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                secret_string_template=json.dumps({
+                    "WHATS_VERIFICATION_TOKEN": "CHANGE_ME_VERIFICATION_TOKEN",
+                    "WHATS_TOKEN": "CHANGE_ME_TOKEN",
+                    "DISPLAY_PHONE_NUMBER": "CHANGE_ME_PHONE_NUMBER",
+                }),
+                generate_string_key="WHATS_APP_SECRET",
+                exclude_punctuation=True,
+                password_length=40,
+            ),
         )
-
-        # --- Secrets Manager for Instagram credentials ---
         ig_secrets = secretsmanager.Secret(
             self,
             "InstagramSecrets",
-            secret_object_value={
-                "IG_TOKEN": SecretValue.unsafe_plain_text(
-                    "CHANGE_ME_IG_TOKEN"
-                ),
-                "IG_ACCOUNT_ID": SecretValue.unsafe_plain_text(
-                    "CHANGE_ME_IG_ACCOUNT_ID"
-                ),
-                "IG_VERIFICATION_TOKEN": SecretValue.unsafe_plain_text(
-                    "CHANGE_ME_IG_VERIFICATION_TOKEN"
-                ),
-            },
+            description="Instagram messaging credentials. Replace the CHANGE_ME values.",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                secret_string_template=json.dumps({
+                    "IG_TOKEN": "CHANGE_ME_IG_TOKEN",
+                    "IG_ACCOUNT_ID": "CHANGE_ME_IG_ACCOUNT_ID",
+                    "IG_VERIFICATION_TOKEN": "CHANGE_ME_IG_VERIFICATION_TOKEN",
+                }),
+                generate_string_key="IG_APP_SECRET",
+                exclude_punctuation=True,
+                password_length=40,
+            ),
         )
 
         # --- S3 Bucket for media and transcriptions ---
@@ -72,25 +99,34 @@ class WhatsAppApiGatewayStack(Stack):
             self,
             "MediaBucket",
             versioned=True,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
+            removal_policy=RemovalPolicy.RETAIN if retain_data else RemovalPolicy.DESTROY,
+            auto_delete_objects=not retain_data,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
             enforce_ssl=True,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id=f"expire-{prefix.strip('/')}",
+                    prefix=prefix,
+                    expiration=Duration.days(retention_days),
+                    noncurrent_version_expiration=Duration.days(1),
+                    abort_incomplete_multipart_upload_after=Duration.days(1),
+                )
+                for prefix in MEDIA_PREFIXES
+            ],
         )
 
         # --- DynamoDB ---
-        db = MessageDatabase(self, "Database")
-        users_db = UserIdentityDatabase(self, "UsersDatabase")
+        db = MessageDatabase(self, "Database", retain_data=retain_data)
+        users_db = UserIdentityDatabase(self, "UsersDatabase", retain_data=retain_data)
 
         # --- Grant AgentCore runtime role access to media bucket + users table ---
-        agentcore_role = iam.Role.from_role_arn(
-            self, "AgentCoreRuntimeRole", RUNTIME_ROLE_ARN
-        )
+        agentcore_role = iam.Role.from_role_arn(self, "AgentCoreRuntimeRole", runtime_role_arn)
         bucket.grant_read(agentcore_role)
         users_db.table.grant_read_write_data(agentcore_role)
 
         # --- Lambda Layers ---
-        layers = ProjectLayers(self, "Layers")
+        layers = ProjectLayers(self, "Layers", layer_path=ctx("layer_path"))
 
         # --- Lambda Functions ---
         lambdas = ProjectLambdas(
@@ -102,11 +138,21 @@ class WhatsAppApiGatewayStack(Stack):
             common_layer=layers.common_layer,
             secret_arn=secrets.secret_arn,
             ig_secret_arn=ig_secrets.secret_arn,
-            agent_runtime_arn=AGENT_RUNTIME_ARN,
+            agent_runtime_arn=agent_runtime_arn,
+            graph_api_version=graph_api_version,
+            receiver_reserved_concurrency=optional_int(ctx("receiver_reserved_concurrency")),
+            processor_reserved_concurrency=optional_int(ctx("processor_reserved_concurrency")),
         )
 
         # --- API Gateway ---
-        api = WebhookApi(self, "API", whatsapp_in_fn=lambdas.webhook_receiver)
+        WebhookApi(
+            self,
+            "API",
+            whatsapp_in_fn=lambdas.webhook_receiver,
+            throttle_rate=optional_int(ctx("throttle_rate_limit")) or DEFAULT_THROTTLE_RATE,
+            throttle_burst=optional_int(ctx("throttle_burst_limit")) or DEFAULT_THROTTLE_BURST,
+            enable_waf=enable_waf,
+        )
 
         # --- Export unified_users table name to SSM for AgentCore tool ---
         ssm.StringParameter(
@@ -117,7 +163,7 @@ class WhatsAppApiGatewayStack(Stack):
         )
 
         # --- Outputs ---
-        CfnOutput(self, "AgentRuntimeArn", value=AGENT_RUNTIME_ARN)
+        CfnOutput(self, "AgentRuntimeArn", value=agent_runtime_arn)
         CfnOutput(self, "MessagesTableName", value=db.table.table_name)
         CfnOutput(self, "S3BucketName", value=bucket.bucket_name)
         CfnOutput(self, "UnifiedUsersTableName", value=users_db.table.table_name)
@@ -125,3 +171,4 @@ class WhatsAppApiGatewayStack(Stack):
         CfnOutput(self, "IGSecretArn", value=ig_secrets.secret_arn)
         CfnOutput(self, "WebhookReceiverName", value=lambdas.webhook_receiver.function_name)
         CfnOutput(self, "ProcessorName", value=lambdas.message_processor.function_name)
+        CfnOutput(self, "ProcessorFailureQueueUrl", value=lambdas.stream_dlq.queue_url)

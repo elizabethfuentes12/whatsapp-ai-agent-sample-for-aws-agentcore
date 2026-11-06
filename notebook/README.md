@@ -1,80 +1,66 @@
-# Notebook — Test the Deployed Amazon Bedrock AgentCore Agent
+# Notebooks to Test the AgentCore Agent
 
-Jupyter notebooks to test the deployed [Amazon Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtimes.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) directly, validating all multimedia types and memory persistence before connecting a WhatsApp frontend. This is the recommended way to verify your agent works correctly after deploying Stack 00.
+Two notebooks to exercise the agent without a WhatsApp or Instagram frontend. Open them in JupyterLab or VS Code. Outputs are not stored in the repository; run the cells yourself.
 
-> **Prerequisite**: Stack `00-agent-agentcore` **must be deployed first**. The notebook reads configuration from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) parameters exported by the stack. You also need to run `bash create_deployment_package.sh` in `00-agent-agentcore/` to generate the custom botocore service model. See the [Stack 00 README](../00-agent-agentcore/README.md) for deployment instructions.
+This sample works with Amazon Bedrock AgentCore.
+
+> Code in this repository is provided "as is", and is not officially supported by Amazon.
 
 ## What notebooks are available?
 
-| Notebook | Purpose |
-|----------|---------|
-| `test_agentcore_deployed.ipynb` | End-to-end test of the deployed runtime — text, image, audio, video, document, and memory recall |
-| `test_agentcore_deployed_executed.ipynb` | Same notebook with pre-executed outputs for reference |
-| `test_multimodal_agent.ipynb` | Local test of the agent logic (imports agent code directly, does not require deployment) |
-
-## What test files are included?
-
-| File | Size | Used for |
-|------|------|----------|
-| `imagen2.png` | ~2.4 MB | Image processing test (Claude vision) |
-| `Runtime.mp4` | ~220 MB | Video analysis test ([TwelveLabs](https://www.twelvelabs.io/) Pegasus) |
-
-## What does it test?
-
-The `test_agentcore_deployed.ipynb` notebook validates the full agent pipeline:
-
-1. **Text message** — Basic prompt and response through the deployed endpoint
-2. **Memory recall** — Agent remembers name and context from prior turns (short-term memory)
-3. **Image processing** — Base64-encoded PNG sent as inline content block (Claude vision)
-4. **Audio transcript** — Simulated transcription sent as text prompt
-5. **Video analysis** — Video uploaded to Amazon S3, analyzed with [TwelveLabs Pegasus](https://docs.twelvelabs.io/docs/concepts/models) via the `video_analysis` tool
-6. **Document processing** — Base64-encoded PDF/DOCX sent as inline content block
-7. **Cross-turn memory** — Agent summarizes the full conversation demonstrating context retention
-8. **Memory records inspection** — Queries the [AgentCore Memory API](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to inspect stored facts and preferences
+| Notebook | Purpose | Needs |
+|----------|---------|-------|
+| `test_agentcore_deployed.ipynb` | Calls the **deployed** [AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with `InvokeAgentRuntime`: text, memory, idempotency, image, audio transcript, video, document, rejected payload, long-term memory records | Stack `00-agent-agentcore` deployed, AWS credentials |
+| `test_multimodal_agent.ipynb` | Runs the **same agent code** locally (imports `00-agent-agentcore/agent_files`) without AgentCore Memory; includes cells that validate payloads offline | Amazon Bedrock access for the configured model |
 
 ## What are the prerequisites?
 
-- [Stack 00 (`00-agent-agentcore`)](../00-agent-agentcore/README.md) deployed successfully
-- Deployment package built (`bash create_deployment_package.sh` in `00-agent-agentcore/`)
-- [AWS CLI](https://aws.amazon.com/cli/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) configured with credentials that can invoke AgentCore Runtime
-- Python 3.11 or later with `boto3` installed
-- [TwelveLabs API key](https://dashboard.twelvelabs.io/) configured in [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) (for video analysis tests)
+- Python 3.11 or later and a Jupyter environment (JupyterLab or VS Code).
+- For the deployed notebook: [Stack 00](../00-agent-agentcore/README.md) deployed, credentials that can read the `/agentcore/*` SSM parameters, call `bedrock-agentcore:InvokeAgentRuntime` and `bedrock-agentcore:RetrieveMemoryRecords`, and `boto3` 1.43 or later. The `bedrock-agentcore` client is part of the public SDK, so the old custom botocore model is no longer needed.
+- For the local notebook: the first cell installs the pinned runtime packages (`bedrock-agentcore[strands-agents]`, `strands-agents[otel]`, `twelvelabs`). Model access in [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) for `global.anthropic.claude-sonnet-4-6` (set `MODEL_ID` to change it).
+- Optional for video: the TwelveLabs key stored in the stack's secret.
 
-## How do I run it?
+## What test files are included?
 
-```bash
-cd notebook
-pip install boto3 jupyter
-jupyter notebook test_agentcore_deployed.ipynb
-```
+| File | Used for |
+|------|----------|
+| `imagen2.png` (about 2.4 MB) | Image test. The deployed notebook shrinks it when it is above the 1.5 MB media limit and Pillow is installed. |
+| Your own `sample_video.mp4`, `sample_document.pdf`, `sample_image.jpg` | Optional; cells skip the test when the file is missing. Videos are git-ignored. |
 
-The notebook reads the AgentCore Runtime ARN, S3 bucket, and Memory ID from SSM Parameter Store automatically. No manual configuration needed beyond having Stack 00 deployed.
+## What does the deployed notebook test?
 
-## How does the custom botocore model work?
-
-The `bedrock-agentcore` service is not yet in the public boto3 SDK. The notebook loads a custom service model from the deployment package:
-
-```python
-CUSTOM_DATA_PATH = "../00-agent-agentcore/agent_files/deployment_package/botocore/data"
-
-bcore = botocore.session.get_session()
-loader = botocore.loaders.Loader(extra_search_paths=[CUSTOM_DATA_PATH])
-bcore.register_component("data_loader", loader)
-session = boto3.Session(botocore_session=bcore, region_name="us-east-1")
-agentcore = session.client("bedrock-agentcore")
-```
-
-This enables calling `invoke_agent_runtime()` before the service is available in the standard SDK.
+1. **Text and short-term memory**: the agent remembers a name and a country within one session.
+2. **Idempotency**: a repeated `idempotency_key` returns the cached answer.
+3. **Image, audio transcript, video, document**: the payload formats the Lambdas send.
+4. **Rejected payload**: an unsupported image format never reaches the model or the memory.
+5. **Long-term memory**: `RetrieveMemoryRecords` on `/facts/<actor_id>/` and `/preferences/<actor_id>/`. Extraction is asynchronous, so wait a few minutes if the lists are empty.
 
 ## What payload formats does the agent accept?
 
-| Media type | Payload structure |
-|------------|-------------------|
-| **Text** | `{"prompt": "Hello", "actor_id": "wa-user-..."}` |
-| **Image** | `{"prompt": "Describe this", "actor_id": "...", "media": {"type": "image", "format": "png", "data": "<base64>"}}` |
-| **Document** | `{"prompt": "Summarize", "actor_id": "...", "media": {"type": "document", "format": "pdf", "data": "<base64>", "name": "file"}}` |
-| **Video** | `{"prompt": "Analyze", "actor_id": "...", "media": {"type": "video", "s3_uri": "s3://bucket/key.mp4"}}` |
-| **Audio** | `{"prompt": "Audio transcription: \"text\"", "actor_id": "..."}` (transcript as text, no media block) |
+| Media type | Payload |
+|------------|---------|
+| Text | `{"prompt": "Hello", "actor_id": "wa-user-...", "idempotency_key": "..."}` |
+| Image | add `"media": {"type": "image", "format": "png", "data": "<base64>"}` |
+| Document | add `"media": {"type": "document", "format": "pdf", "data": "<base64>", "name": "file"}` |
+| Video | add `"media": {"type": "video", "s3_uri": "s3://bucket/video/file.mp4"}` |
+| Audio | add `"media": {"type": "audio_transcript", "data": "<text>"}` |
+
+`actor_id` and the session ID must be at least 33 characters and different from each other. Decoded media above about 1.5 MB is rejected.
+
+## What was validated?
+
+The offline cells of the local notebook (payload validation and content block order) were executed with the pinned packages. The cells that call AWS (Bedrock, AgentCore, S3, TwelveLabs) were reviewed against the current API shapes (`invoke_agent_runtime`, `retrieve_memory_records` in boto3 1.43) but **not** run, because the authoring environment has no AWS account.
+
+## Frequently asked questions
+
+**Why does the notebook not set `runtimeUserId`?**
+The agent reads the actor ID from the payload. `runtimeUserId` needs the extra `InvokeAgentRuntimeForUser` permission, which the notebook does not require.
+
+**Why do the memory lists come back empty?**
+Long-term extraction runs in the background and can take a few minutes after the conversation.
+
+**Can I run it against a model other than the default?**
+Yes. For the local notebook set `MODEL_ID` before the import cell. For the deployed runtime, redeploy stack 00 with `-c model_id=...`.
 
 ---
 

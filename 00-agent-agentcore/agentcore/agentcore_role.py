@@ -1,79 +1,139 @@
-"""IAM role for AgentCore Runtime execution."""
+"""IAM role for AgentCore Runtime execution (least privilege)."""
+
+from typing import Optional
 
 from constructs import Construct
-from aws_cdk import aws_iam as iam
+from aws_cdk import Aws, aws_iam as iam
+
+from agentcore.config import RUNTIME_NAME, model_resource_arns
 
 
 class AgentCoreRole(Construct):
-    """Creates an IAM execution role for the AgentCore Runtime."""
+    """Creates an IAM execution role for the AgentCore Runtime.
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    Statements follow the documented direct-deploy execution role
+    (https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html)
+    narrowed to this application: the memory ARN, the configured model and
+    inference profile, the runtime log groups and the SSM parameters under
+    ``/agentcore/``. Only X-Ray write APIs keep ``Resource: "*"`` because they
+    do not support resource-level permissions.
+
+    Args:
+        memory_arn: ARN of the AgentCore Memory the agent reads and writes.
+        model_id: Bedrock model or inference profile ID the agent invokes.
+        guardrail_arn: Optional Bedrock Guardrail ARN the agent applies.
+    """
+
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        memory_arn: str,
+        model_id: str,
+        guardrail_arn: Optional[str] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        partition, region, account = Aws.PARTITION, Aws.REGION, Aws.ACCOUNT_ID
 
         self.role = iam.Role(
             self,
             "AgentCoreExecutionRole",
-            assumed_by=iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess"),
-                iam.ManagedPolicy.from_aws_managed_policy_name("AWSXRayDaemonWriteAccess"),
-                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonEC2ContainerRegistryReadOnly"),
-            ],
+            assumed_by=iam.ServicePrincipal(
+                "bedrock-agentcore.amazonaws.com",
+                conditions={
+                    "StringEquals": {"aws:SourceAccount": account},
+                    "ArnLike": {"aws:SourceArn": f"arn:{partition}:bedrock-agentcore:{region}:{account}:*"},
+                },
+            ),
         )
+
+        runtime_log_groups = f"arn:{partition}:logs:{region}:{account}:log-group:/aws/bedrock-agentcore/runtimes/*"
 
         self.role.add_to_policy(
             iam.PolicyStatement(
+                sid="RuntimeLogGroups",
+                actions=["logs:CreateLogGroup", "logs:DescribeLogStreams"],
+                resources=[runtime_log_groups],
+            )
+        )
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                sid="UnifiedSpanDestination",
+                actions=["logs:PutResourcePolicy"],
+                resources=[
+                    f"arn:{partition}:logs:{region}:{account}:log-group:/aws/bedrock-agentcore/runtimes/{RUNTIME_NAME}*"
+                ],
+            )
+        )
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                sid="DescribeLogGroups",
+                actions=["logs:DescribeLogGroups"],
+                resources=[f"arn:{partition}:logs:{region}:{account}:log-group:*"],
+            )
+        )
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                sid="RuntimeLogStreams",
+                actions=["logs:CreateLogStream", "logs:PutLogEvents"],
+                resources=[f"{runtime_log_groups}:log-stream:*"],
+            )
+        )
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                sid="XRayWrite",
                 actions=[
-                    "bedrock:InvokeModel",
-                    "bedrock:InvokeModelWithResponseStream",
-                    "bedrock:GetFoundationModel",
-                    "bedrock:ListFoundationModels",
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords",
+                    "xray:GetSamplingRules",
+                    "xray:GetSamplingTargets",
                 ],
                 resources=["*"],
             )
         )
-
         self.role.add_to_policy(
             iam.PolicyStatement(
+                sid="RuntimeMetrics",
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"],
+                conditions={"StringEquals": {"cloudwatch:namespace": "bedrock-agentcore"}},
+            )
+        )
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                sid="BedrockModelInvocation",
+                actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+                resources=model_resource_arns(model_id, region, account, partition),
+            )
+        )
+        if guardrail_arn:
+            self.role.add_to_policy(
+                iam.PolicyStatement(
+                    sid="ApplyGuardrail",
+                    actions=["bedrock:ApplyGuardrail"],
+                    resources=[guardrail_arn],
+                )
+            )
+        self.role.add_to_policy(
+            iam.PolicyStatement(
+                sid="MemoryDataPlane",
                 actions=[
-                    "bedrock-agentcore:InvokeAgentRuntime",
                     "bedrock-agentcore:CreateEvent",
                     "bedrock-agentcore:GetEvent",
                     "bedrock-agentcore:ListEvents",
+                    "bedrock-agentcore:DeleteEvent",
                     "bedrock-agentcore:RetrieveMemoryRecords",
                     "bedrock-agentcore:ListMemoryRecords",
-                    "bedrock-agentcore:ListSessions",
-                    "bedrock-agentcore:ListActors",
-                    "bedrock-agentcore:DeleteMemoryRecord",
                 ],
-                resources=["*"],
+                resources=[memory_arn],
             )
         )
-
         self.role.add_to_policy(
             iam.PolicyStatement(
-                actions=[
-                    "aws-marketplace:ViewSubscriptions",
-                    "aws-marketplace:Subscribe",
-                ],
-                resources=["*"],
-            )
-        )
-
-        self.role.add_to_policy(
-            iam.PolicyStatement(
-                actions=[
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents",
-                ],
-                resources=["*"],
-            )
-        )
-
-        self.role.add_to_policy(
-            iam.PolicyStatement(
+                sid="SharedParameters",
                 actions=["ssm:GetParameter"],
-                resources=["arn:aws:ssm:*:*:parameter/agentcore/*"],
+                resources=[f"arn:{partition}:ssm:{region}:{account}:parameter/agentcore/*"],
             )
         )
