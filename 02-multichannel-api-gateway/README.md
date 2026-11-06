@@ -1,20 +1,22 @@
 # Multichannel AI Agent: WhatsApp + Instagram via API Gateway
 
-> **Last updated**: 2026-03-30
-
 A dual-channel AI agent that processes text, images, video, audio, and documents from **WhatsApp** and **Instagram DMs** through a single [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) webhook. One deployment serves both platforms using [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with cross-channel memory.
 
-The architecture uses a 2-Lambda pipeline with [DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) tumbling window for message buffering (approximately 75% cost reduction), a unified users table for cross-channel identity, and automatic Instagram profile resolution via the [Meta Graph API](https://developers.facebook.com/docs/graph-api/).
+The architecture uses a 2-Lambda pipeline with [DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) tumbling window for message buffering, a unified users table for cross-channel identity, and automatic Instagram profile resolution via the [Meta Graph API](https://developers.facebook.com/docs/graph-api/).
+
+This sample works with Amazon Bedrock AgentCore.
+
+> Code in this repository is provided "as is", and is not officially supported by Amazon.
 
 > Your data will be securely stored in your AWS account and will not be shared or used for model training. It is not recommended to share private information because the security of data with WhatsApp or Instagram is not guaranteed.
 
 | Voice notes | Image |
 |----------|------------|
-|![Voice notes](./images/voice-note.gif)| ![Image](./images/image-whatsapp-agent.gif) |
+|![Voice notes](../images/voice-note.gif)| ![Image](../images/image-whatsapp-agent.gif) |
 
 | Video | Instagram |
 |--------------|--------------|
-|![Video](./images/video-whatsapp-agent.gif)|![Instagram](./images/chat-instagram-agent.gif)|
+|![Video](../images/video-whatsapp-agent.gif)|![Instagram](../images/chat-instagram-agent.gif)|
 
 ✅ **AWS Level**: Advanced - 300
 
@@ -23,10 +25,10 @@ The architecture uses a 2-Lambda pipeline with [DynamoDB Streams](https://docs.a
 - [AWS Account](https://aws.amazon.com/resources/create-account/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Foundational knowledge of Python](https://catalog.us-east-1.prod.workshops.aws/workshops/3d705026-9edc-40e8-b353-bdabb116c89c/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [AWS CLI configured](https://docs.aws.amazon.com/cli/v1/userguide/cli-chap-configure.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with appropriate permissions
-- [Python 3.11](https://www.python.org/downloads/) or later and [uv](https://docs.astral.sh/uv/) (builds the arm64 Lambda layer during `cdk synth`; Lambda functions run on Python 3.13)
+- [Python 3.11](https://www.python.org/downloads/) or later, Node.js (for `npx aws-cdk@latest`) and [uv](https://docs.astral.sh/uv/). The first `cdk synth` builds the arm64 Lambda layer with `uv` and needs network access. The Lambda functions run on Python 3.13
 - [AWS Cloud Development Kit (CDK)](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) v2 or later
 - [Meta Developer account](https://developers.facebook.com/) with WhatsApp Business API access
-- For Instagram: An [Instagram Professional account](https://help.instagram.com/502981923235522) (Business or Creator) linked to [Meta Accounts Center](https://accountscenter.meta.com/) — see [How do I configure Instagram?](#how-do-i-configure-instagram) below
+- For Instagram: An [Instagram Professional account](https://help.instagram.com/502981923235522) (Business or Creator) linked to [Meta Accounts Center](https://accountscenter.meta.com/): see [How do I configure Instagram?](#how-do-i-configure-instagram) below
 - Stack `00-agent-agentcore` deployed (provides SSM parameters)
 - [TwelveLabs](https://www.twelvelabs.io/) API key for video analysis (free account at [twelvelabs.io](https://www.twelvelabs.io/))
 
@@ -50,11 +52,12 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
   - **Unified users table**: Cross-channel identity resolution. Maps WhatsApp phone numbers and Instagram IDs to a single canonical `user_id` used as `actor_id` in AgentCore Memory. GSIs on `wa_phone` and `ig_id` for lookups.
 
 - [Amazon API Gateway](https://aws.amazon.com/api-gateway/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - REST API with `/webhook` endpoint (POST for messages, GET for verification).
+  - REST API with only `GET /webhook` (verification) and `POST /webhook` (messages). POST requires the `X-Hub-Signature-256` header, requests are validated, the stage is throttled (50 requests per second, burst 100 by default), access logs and X-Ray tracing are on, and there is no CORS. An optional regional WAF rate rule is available with `-c enable_waf=true`.
 
 - [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
-  - **WhatsApp secret**: `WHATS_VERIFICATION_TOKEN` (webhook verification token), `WHATS_TOKEN` ([Meta Graph API](https://developers.facebook.com/docs/graph-api/) access token), and `DISPLAY_PHONE_NUMBER` (business phone number for message filtering).
-  - **Instagram secret**: `IG_TOKEN` (Instagram access token), `IG_ACCOUNT_ID` (Instagram Business Account ID), and `IG_VERIFICATION_TOKEN` (webhook verification token for Instagram).
+  - **WhatsApp secret**: `WHATS_APP_SECRET` (Meta app secret, used to verify webhook signatures), `WHATS_VERIFICATION_TOKEN` (webhook verification token), `WHATS_TOKEN` ([Meta Graph API](https://developers.facebook.com/docs/graph-api/) access token) and `DISPLAY_PHONE_NUMBER` (business phone number for message filtering).
+  - **Instagram secret**: `IG_APP_SECRET`, `IG_TOKEN`, `IG_ACCOUNT_ID` and `IG_VERIFICATION_TOKEN`.
+  - The two `*_APP_SECRET` values start as random strings generated by the stack, so a fresh deployment rejects every POST until you store the real secrets.
 
 - [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - Runtime invocation for processing all message types with multimodal Strands agent.
@@ -70,7 +73,7 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
 3. `webhook_receiver` Lambda detects the channel from `body.object` (`whatsapp_business_account` or `instagram`), normalizes the message, downloads media to S3, and saves to DynamoDB with a `channel` field.
    - **WhatsApp** messages use `from_phone` = phone number as partition key.
    - **Instagram** messages use `from_phone` = `ig-{sender_id}` as partition key (prefixed to avoid collisions).
-4. DynamoDB Streams captures the INSERT event. The tumbling window (20 seconds) buffers records before invoking `message_processor`.
+4. DynamoDB Streams captures the INSERT event. The tumbling window (10 seconds) buffers records before invoking `message_processor`.
 5. `message_processor` aggregates all buffered messages per sender:
    - **Text**: Messages joined with newlines into a single prompt.
    - **Image/Document**: Downloaded from S3, base64-encoded, sent as inline content block to the agent.
@@ -78,12 +81,12 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
    - **Audio**: Transcribed synchronously using [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), then sent as text to the agent.
 6. [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) processes the aggregated message with memory context.
 7. Response is dispatched back to the user via the correct channel:
-   - **WhatsApp**: `POST https://graph.facebook.com/{phone_id}/messages` with `messaging_product: whatsapp`.
+   - **WhatsApp**: `POST https://graph.facebook.com/<version>/{phone_id}/messages` with `messaging_product: whatsapp`.
    - **Instagram**: `POST https://graph.instagram.com/v25.0/{ig_account_id}/messages` with `recipient.id`.
 
 ### How does message buffering work?
 
-The architecture uses a [DynamoDB Streams tumbling window](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.Lambda.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) (default: 20 seconds) to batch rapid-fire WhatsApp messages into a single agent invocation. When users send multiple messages in quick succession (common in WhatsApp), this reduces token usage and AgentCore Runtime costs.
+The architecture uses a [DynamoDB Streams tumbling window](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.Lambda.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) (default: 10 seconds) to batch rapid-fire messages into a single agent invocation. When users send multiple messages in quick succession (common in WhatsApp), this reduces token usage and AgentCore Runtime costs.
 
 **How it works:**
 
@@ -105,21 +108,21 @@ Tumbling window fires at t=20s:
   -> Single AgentCore invocation
 ```
 
-The buffer duration is configurable in the CDK construct (default: 20 seconds).
+The buffer duration is the `buffer_seconds` argument of the Lambda construct (default: 10 seconds).
 
-> This buffering technique is based on [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat), which demonstrates DynamoDB Streams with tumbling windows for WhatsApp message aggregation. That project reports reducing ~1,000 raw messages to ~250 aggregated messages (4:1 ratio), yielding approximately 75% cost savings on downstream processing. In our case, the savings apply to AgentCore Runtime invocations and LLM token usage.
+> This buffering technique is based on [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat), which demonstrates DynamoDB Streams with tumbling windows for WhatsApp message aggregation. That project reports roughly 4 raw messages per aggregate. That ratio was not measured in this repository, so your saving depends on how your users type.
 
 #### How does error handling and retry work?
 
-The `message_processor` Lambda retries [AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html) invocations with exponential backoff (3 attempts, base delay 2 seconds) on transient errors:
+The `message_processor` Lambda retries [AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) invocations with exponential backoff (3 attempts, base delay 2 seconds) on transient errors:
 
 | Error | HTTP | Cause | Reference |
 |-------|------|-------|-----------|
-| `InternalServerException` | 500 | Temporary runtime error | [AWS recommends exponential backoff](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html) |
-| `RuntimeClientError` | 424 | MicroVM unavailable (cold start after [session resume](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html)) | [Runtime Sessions docs](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html) |
-| `ThrottlingException` | 429 | Rate limit exceeded | [API reference](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html) |
+| `InternalServerException` | 500 | Temporary runtime error | [AWS recommends exponential backoff](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
+| `RuntimeClientError` | 424 | MicroVM unavailable (cold start after [session resume](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)) | [Runtime Sessions docs](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
+| `ThrottlingException` | 429 | Rate limit exceeded | [API reference](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
 
-[Strands Agents](https://strandsagents.com/) does not support concurrent calls to the same Agent instance ([ConcurrencyException](https://github.com/strands-agents/sdk-python/issues/1702)). If a second message arrives while the agent is processing a long request (e.g., video analysis), the retry mechanism waits and retries after the first request completes.
+[Strands Agents](https://strandsagents.com/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) does not support concurrent calls to the same Agent instance ([ConcurrencyException](https://github.com/strands-agents/sdk-python/issues/1702)). If a second message arrives while the agent is processing a long request (e.g., video analysis), the retry mechanism waits and retries after the first request completes.
 
 #### How does agent processing work?
 
@@ -139,64 +142,80 @@ The `message_processor` Lambda retries [AgentCore Runtime](https://docs.aws.amaz
 
 ### What are the key files?
 
-- `app.py`: Entry point for the CDK application.
-- `lambdas/project_lambdas.py`: CDK construct defining both Lambdas, DynamoDB table, and permissions.
-- `lambdas/code/webhook_receiver/lambda_function.py`: Webhook handler (POST: download media, store message in DynamoDB; GET: verify token).
-- `lambdas/code/message_processor/lambda_function.py`: Stream consumer -- aggregates buffered messages, transcribes audio via [Amazon Transcribe](https://docs.aws.amazon.com/transcribe/latest/dg/what-is.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), invokes [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), sends reply via [Meta Graph API](https://developers.facebook.com/docs/graph-api/).
-- `layers/common/python/utils.py`: Webhook validation, response builders, phone normalization.
-- `layers/common/python/media_utils.py`: Media download (Graph API), Amazon S3 upload, base64 encoding.
-- `apis/webhooks.py`: Amazon API Gateway REST API construct.
+| File | Purpose |
+|------|---------|
+| `app.py` | Entry point of the CDK app |
+| `whatsapp_api_gateway/whatsapp_stack.py` | Stack: SSM parameters, secrets, bucket, tables, layer, Lambdas, API, outputs |
+| `whatsapp_api_gateway/config.py` | Graph API version (`v25.0`), TTL, throttle defaults, media limit, context helpers |
+| `apis/webhooks.py` | REST API: `GET` and `POST /webhook`, validators, throttling, access logs, optional WAF |
+| `lambdas/project_lambdas.py` | Receiver and processor Lambdas (Python 3.13, arm64), failure queue, event source mapping, IAM |
+| `lambdas/code/webhook_receiver/` | Signature check, routing by `object`, media download, conditional put |
+| `lambdas/code/message_processor/` | Claims, identity resolution, transcription, AgentCore call, replies |
+| `layers/common/python/` | Shared modules: `security.py` (HMAC), `graph_api.py`, `media_utils.py`, `message_utils.py`, `idempotency.py`, `secrets_cache.py`, `safe_logging.py` |
+| `layers/build_layer.sh` | Builds the pinned arm64, Python 3.13 layer into `layers/.build` (git-ignored) |
+| `databases/databases.py` | Messages table (stream, TTL, encryption) and unified users table (GSIs, PITR) |
+| `tests/` | 72 offline tests: signatures, receiver, processor, media safety, helpers, CDK assertions |
+
+### How does webhook security work?
+
+Meta calls the endpoint over the internet, so the signature is the gate. The receiver computes HMAC-SHA256 over the **raw** request body with the app secret from Secrets Manager and compares it to `X-Hub-Signature-256` in constant time, before parsing the body. It answers 403 when the secret is missing, unreadable or still a placeholder, or when the header is absent or wrong. A WhatsApp signature cannot authorize an Instagram payload, and the other way round. The verification handshake (`GET`) uses the verification tokens.
+
+Further protections: tokens go in the `Authorization` header and never in URLs or in DynamoDB; media downloads only go to Meta-owned HTTPS hosts, with a 25 MB cap; logs hold IDs, counts and masked phone numbers only; Meta's redeliveries (up to 36 hours) are absorbed by a conditional put on `(from_phone, id)` with a 48 hour TTL.
 
 ## How do I deploy this?
 
 ### Installation
 
-✅ **Clone the repository**:
+Deploy `00-agent-agentcore` first.
+
 ```bash
 git clone https://github.com/aws-samples/whatsapp-ai-agent-sample-for-aws-agentcore
-cd 02-multichannel-api-gateway
-```
-
-✅ **Create and activate a virtual environment**:
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-✅ **Install dependencies**:
-```bash
+cd whatsapp-ai-agent-sample-for-aws-agentcore/02-multichannel-api-gateway
+uv venv .venv --python 3.11 && source .venv/bin/activate
 uv pip install -r requirements.txt
+npx aws-cdk@latest deploy
 ```
 
-✅ **Install layer dependencies**:
+There is no layer step to run by hand: `cdk synth` builds the pinned layer (`requests`, `boto3`) for arm64 and Python 3.13. Note the `WebhookUrl` output, you need it for the Meta webhook.
+
+### How do I test it without AWS credentials?
+
 ```bash
-cd layers/common && pip install requests -t python/
+uv pip install -r requirements-dev.txt
+python -m pytest -q
+export AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=x CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1
+npx --yes aws-cdk@latest synth --quiet
 ```
 
-✅ **Synthesize the CloudFormation template**:
-```bash
-cdk synth
-```
+Add `-c layer_path=layers/common` to skip the dependency build (the tests do this).
 
-✅ **Deploy**:
-```bash
-cdk deploy
-```
+### Which options can I change?
 
-> Note the output values, especially the Amazon API Gateway URL, which will be used for configuring the WhatsApp webhook.
+CDK context, passed as `cdk deploy -c key=value`:
+
+| Context key | Default | Effect |
+|-------------|---------|--------|
+| `graph_api_version` | `v25.0` | Graph API version for WhatsApp and Instagram |
+| `media_retention_days` | 30 | Expiration of media in the bucket |
+| `retain_data` | false | `true` keeps tables and bucket on stack deletion, with deletion protection |
+| `throttle_rate_limit`, `throttle_burst_limit` | 50, 100 | Stage throttling |
+| `enable_waf` | false | Regional web ACL with a per-IP rate rule |
+| `receiver_reserved_concurrency`, `processor_reserved_concurrency` | unset | Reserved Lambda concurrency |
+| `layer_path` | built | Prebuilt layer folder |
 
 ## How do I configure WhatsApp?
 
 ### Step 0: Activate WhatsApp account Facebook Developers
 
 1. [Get Started with the New WhatsApp Business Platform](https://www.youtube.com/watch?v=CEt_KMMv3V8&list=PLX_K_BlBdZKi4GOFmJ9_67og7pMzm2vXH&index=2&t=17s&pp=gAQBiAQB)
-2. [How To Generate a Permanent Access Token — WhatsApp API](https://www.youtube.com/watch?v=LmoiCMJJ6S4&list=PLX_K_BlBdZKi4GOFmJ9_67og7pMzm2vXH&index=1&t=158s&pp=gAQBiAQB)
+2. [How To Generate a Permanent Access Token: WhatsApp API](https://www.youtube.com/watch?v=LmoiCMJJ6S4&list=PLX_K_BlBdZKi4GOFmJ9_67og7pMzm2vXH&index=1&t=158s&pp=gAQBiAQB)
 
 ### Step 1: Deploy Stack 00 (AgentCore) first
 
 This stack depends on the Amazon Bedrock AgentCore Runtime deployed in `00-agent-agentcore`. Make sure it is deployed and the SSM parameter is available:
 
 - `/agentcore/agent_runtime_arn`
+- `/agentcore/runtime_role_arn`
 
 ### Step 2: Set WhatsApp credentials
 
@@ -204,7 +223,7 @@ Edit WhatsApp configuration values in [AWS Secrets Manager](https://aws.amazon.c
 
 | Secret Key | Description | Where to find it |
 |---|---|---|
-| `WHATS_VERIFICATION_TOKEN` | Webhook verification token. You choose any value — must match the "Verify token" field in Meta webhook configuration (Step 3). | You define it |
+| `WHATS_VERIFICATION_TOKEN` | Webhook verification token. You choose any value: must match the "Verify token" field in Meta webhook configuration (Step 3). | You define it |
 | `WHATS_TOKEN` | Permanent Meta Graph API access token for sending messages. | [Meta Developer Console](https://developers.facebook.com/) → Your App → WhatsApp → API Setup → "Generate permanent token" |
 | `WHATS_APP_SECRET` | **App secret** of your Meta app. The webhook rejects every POST whose `X-Hub-Signature-256` does not match (403), so this value is mandatory. The stack generates a random placeholder. | [Meta Developer Console](https://developers.facebook.com/) → Your App → App settings → Basic → "App secret" |
 | `DISPLAY_PHONE_NUMBER` | WhatsApp Business phone number (with country code, no `+`). Only messages to this number are processed. | [Meta Developer Console](https://developers.facebook.com/) → Your App → WhatsApp → API Setup → "Phone number" (e.g., `1234567890`) |
@@ -221,7 +240,7 @@ aws secretsmanager put-secret-value \
 
 1. Go to [Amazon API Gateway Console](https://console.aws.amazon.com/apigateway?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
 2. Find the API created by the stack.
-3. Go to **Stages** -> **prod** -> **/webhook** -> **GET**, and copy the **Invoke URL**.
+3. Use the `WebhookUrl` stack output, or go to **Stages** -> **prod** -> **/webhook** -> **GET** and copy the **Invoke URL**.
 4. Configure Webhook in the Meta Developer application:
    - Set **Callback URL** to the Invoke URL.
    - Set **Verify token** to the same value as `WHATS_VERIFICATION_TOKEN`.
@@ -265,8 +284,8 @@ Your Instagram account must be a **Professional account** (Business or Creator) 
 3. In the app dashboard, click **Add Product** and add **Instagram**.
 4. Select **API setup with Instagram login**.
 5. Under **Permissions**, make sure the following are enabled:
-   - `instagram_business_basic` — Required for basic account access.
-   - `instagram_business_manage_messages` — Required for sending and receiving DMs.
+   - `instagram_business_basic`: Required for basic account access.
+   - `instagram_business_manage_messages`: Required for sending and receiving DMs.
    - Reference: [Instagram Platform: Messaging API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api).
 
 > **Testing without App Review**: With **Standard Access** (default for all apps), you can test with your own Instagram accounts that have been added to your app. App Review is only required for Advanced Access (serving third-party accounts). Reference: [Instagram API Overview](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/overview).
@@ -289,7 +308,7 @@ Use the token from Step 2 to query the [Instagram Graph API](https://developers.
 curl -s -H "Authorization: Bearer YOUR_IG_TOKEN" "https://graph.instagram.com/v25.0/me?fields=user_id,username"
 ```
 
-The response contains your `user_id` — this is the `IG_ACCOUNT_ID` you need.
+The response contains your `user_id`: this is the `IG_ACCOUNT_ID` you need.
 
 ### Step 4: Set Instagram credentials
 
@@ -300,7 +319,7 @@ Update the Instagram secret in [AWS Secrets Manager](https://aws.amazon.com/secr
 | `IG_TOKEN` | Instagram API access token for sending messages. | [Meta Developer Console](https://developers.facebook.com/) -> Your App -> Instagram -> API setup with Instagram business login -> Generate token |
 | `IG_APP_SECRET` | App secret of the Meta app that owns the Instagram product (same value as `WHATS_APP_SECRET` when both products live in one app). Used to verify `X-Hub-Signature-256`. | Meta Developer Console -> Your App -> App settings -> Basic -> "App secret" |
 | `IG_ACCOUNT_ID` | Your Instagram Professional Account ID. Used to filter out echo messages (messages from your own account). | From the `/me` API call in Step 3, or from the `recipient.id` field in any incoming Instagram webhook payload. |
-| `IG_VERIFICATION_TOKEN` | Webhook verification token for Instagram. You choose any value — must match the "Verify token" field in Meta webhook configuration (Step 5). | You define it |
+| `IG_VERIFICATION_TOKEN` | Webhook verification token for Instagram. You choose any value: must match the "Verify token" field in Meta webhook configuration (Step 5). | You define it |
 
 ```bash
 aws secretsmanager put-secret-value \
@@ -319,13 +338,13 @@ aws secretsmanager put-secret-value \
 5. Subscribe to the `messages` field (and optionally `messaging_seen`, `messaging_reactions`).
 6. Click **Verify and save**.
 
-> Both WhatsApp and Instagram can share the **same webhook URL**. The receiver Lambda distinguishes them by the `object` field in the payload (`whatsapp_business_account` vs `instagram`). Webhook verification also works for both — the Lambda tries the WhatsApp verification token first, then falls back to the Instagram verification token.
+> Both WhatsApp and Instagram can share the **same webhook URL**. The receiver Lambda distinguishes them by the `object` field in the payload (`whatsapp_business_account` vs `instagram`). Webhook verification also works for both: the Lambda tries the WhatsApp verification token first, then falls back to the Instagram verification token.
 
 ### Step 6: Test Instagram
 
 1. Send a Direct Message to your Instagram Professional account from any Instagram account.
 2. The message arrives at the shared webhook, is detected as `instagram`, and saved to DynamoDB with `from_phone = ig-{sender_id}`.
-3. The tumbling window batches it (20 seconds), the processor invokes AgentCore, and the reply is sent back via the [Instagram Messaging API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api).
+3. The tumbling window batches it (10 seconds), the processor invokes AgentCore, and the reply is sent back via the [Instagram Messaging API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api).
 4. The agent uses a canonical `user_id` as `actor_id` for memory. If the user has linked their WhatsApp and Instagram accounts, both channels share the same long-term memory.
 
 ## How does cross-channel identity work?
@@ -334,7 +353,7 @@ A **unified users table** maps WhatsApp phone numbers and Instagram IDs to a sin
 
 ### How Instagram usernames are resolved
 
-Instagram webhooks only send a numeric `sender.id` (Instagram Scoped ID) — not the username. The `webhook_receiver` Lambda calls the [Instagram Graph API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started) to resolve the profile:
+Instagram webhooks only send a numeric `sender.id` (Instagram Scoped ID): not the username. The `webhook_receiver` Lambda calls the [Instagram Graph API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started) to resolve the profile:
 
 ```
 GET https://graph.instagram.com/v25.0/{sender_id}?fields=name,username   (Authorization: Bearer {IG_TOKEN})
@@ -344,11 +363,11 @@ This returns the user's `name` (display name) and `username` (the `@handle`). Bo
 
 ### How users get linked
 
-On the first interaction, the agent asks the user if they also write from another channel (WhatsApp or Instagram). If the user provides their phone number or Instagram username, the agent calls a `link_account` tool that saves the identifier in the unified users table. This is a one-time action — the agent stores in memory that linking was completed and does not ask again.
+On the first interaction, the agent asks the user if they also write from another channel (WhatsApp or Instagram). If the user provides their phone number or Instagram username, the agent calls a `link_account` tool that saves the identifier in the unified users table. This is a one-time action: the agent stores in memory that linking was completed and does not ask again.
 
 When the user later writes from the linked channel, the processor resolves the identity in two steps:
-1. **Fast path**: Query by `ig_id` GSI (or `wa_phone` GSI) — instant match if the numeric ID is already stored.
-2. **Fallback**: If not found by ID (e.g., user linked by username from WhatsApp, but the numeric `ig_id` is only known when Instagram sends a webhook), scan by `ig_username` — matches the linked record and backfills the `ig_id` for instant future lookups.
+1. **Fast path**: Query by `ig_id` GSI (or `wa_phone` GSI): instant match if the numeric ID is already stored.
+2. **Fallback**: If not found by ID (e.g., user linked by username from WhatsApp, but the numeric `ig_id` is only known when Instagram sends a webhook), scan by `ig_username`: matches the linked record and backfills the `ig_id` for instant future lookups.
 
 ### What the agent prompt includes
 
@@ -381,6 +400,18 @@ If you finish testing and want to clean the application:
 cdk destroy
 ```
 
+## Troubleshooting
+
+| Symptom | Resolution |
+|---------|------------|
+| Meta shows the webhook as failing, POSTs return 403 | `WHATS_APP_SECRET` or `IG_APP_SECRET` is missing, still a generated placeholder, or not the secret of the app that sends the webhook. Store the real app secret. |
+| Verification (`GET`) fails | The verify token in Meta does not match `WHATS_VERIFICATION_TOKEN` or `IG_VERIFICATION_TOKEN`. |
+| No reply, no errors | Check `WebhookReceiverName` and `ProcessorName` log groups. Messages older than 15 minutes are ignored. |
+| `ProcessorFailureQueueUrl` has messages | The stream batch failed repeatedly; read the processor logs for the exception type. |
+| `cdk synth` fails while building the layer | Install `uv` and allow network access, or pass `-c layer_path=layers/common`. |
+| Instagram replies fail | The Instagram token expired (60 days for long-lived tokens). Generate a new one and update `IG_TOKEN`. |
+| Cross-channel memory is empty | Extraction is asynchronous; wait 2 to 3 minutes. |
+
 ## Frequently asked questions
 
 **Can I use WhatsApp and Instagram with the same webhook URL?**
@@ -393,7 +424,7 @@ No. With Standard Access (default), you can test with Instagram accounts you own
 The system prompt instructs the agent to always respond in the same language the user writes. This works automatically for any language.
 
 **Why doesn't the agent remember images or videos I sent?**
-AgentCore Memory retrieves facts using **semantic similarity** to your current message. If you ask a generic question like "what did I send you?", relevant facts may not be retrieved because they score below the relevance threshold. The agent is configured with `top_k: 20` and `relevance_score: 0.3` to maximize context. Also, long-term memory extraction is asynchronous — wait 2-3 minutes after sharing media before testing recall. The agent's prompt includes explicit "Fact:" lines to improve extraction of structured data like video IDs and image descriptions.
+AgentCore Memory retrieves facts using **semantic similarity** to your current message. If you ask a generic question like "what did I send you?", relevant facts may not be retrieved because they score below the relevance threshold. The agent is configured with `top_k: 20` and `relevance_score: 0.3` to maximize context. Also, long-term memory extraction is asynchronous: wait 2-3 minutes after sharing media before testing recall. The agent's prompt includes explicit "Fact:" lines to improve extraction of structured data like video IDs and image descriptions.
 
 **How long does the Instagram token last?**
 Tokens generated from the App Dashboard are long-lived (60 days). Tokens from the Business Login flow are short-lived (1 hour). Reference: [Instagram API: Get Started](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started).
@@ -403,6 +434,12 @@ The AgentCore Runtime and Memory layer is channel-agnostic. To add a new channel
 
 **What if I only want WhatsApp, not Instagram?**
 Deploy the stack and only configure the WhatsApp secret. Instagram messages will be ignored if no Instagram secret is configured. Alternatively, use Stack 01 (`01-whatsapp-end-user-messaging`) for a WhatsApp-only integration via AWS End User Messaging Social.
+
+**Why does every POST return 403 right after deployment?**
+By design. The stack generates random placeholder app secrets, so unsigned or wrongly signed requests are rejected until you store the real Meta app secret.
+
+**What was not validated?**
+This README was checked against the code, the unit tests and `cdk synth`. Real Meta webhooks, Instagram and WhatsApp delivery, Transcribe, TwelveLabs and the AgentCore runtime were not exercised in a live account. See [docs/AUDIT.md](../docs/AUDIT.md).
 
 ## Where can I learn more?
 

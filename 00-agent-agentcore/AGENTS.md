@@ -57,7 +57,7 @@ Pinned in `agent_files/requirements.txt` (runtime zip) and `requirements.txt` (C
 Runtime environment variables set by the stack: `AWS_REGION`, `MODEL_ID`, `BEDROCK_AGENTCORE_MEMORY_ID`, `S3_BUCKET`, `TL_SECRET_ARN`, `TL_MODEL_NAME`, optional `BEDROCK_GUARDRAIL_ID`/`BEDROCK_GUARDRAIL_VERSION`, `UNIFIED_TRACES_DESTINATION_ENABLED`.
 Optional agent tuning (set manually or via a new `environment_variables` entry): `ENABLE_PROMPT_CACHING` (default true), `AGENT_MAX_TURNS` (12), `AGENT_MAX_TOTAL_TOKENS` (200000), `AGENT_WINDOW_SIZE` (40), `LOG_LEVEL`, `LINK_ALLOW_MERGE` (true), `TL_INDEXING_TIMEOUT_SECONDS` (540).
 
-Accounts: Bedrock model access for the chosen model, CDK bootstrap, optional TwelveLabs API key. For traces, enable CloudWatch Transaction Search once per account ([docs](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html)).
+Accounts: Bedrock model access for the chosen model, CDK bootstrap, optional TwelveLabs API key. For traces, enable CloudWatch Transaction Search once per account ([docs](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)).
 
 ## Conventions and gotchas
 
