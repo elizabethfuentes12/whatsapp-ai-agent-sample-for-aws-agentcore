@@ -225,3 +225,6 @@ __marimo__/
 # Stack 02 layer build output (created by layers/build_layer.sh)
 02-multichannel-api-gateway/layers/.build/
 02-multichannel-api-gateway/layers/.build.sha256
+
+# Executed notebooks hold outputs (and sometimes account data); never commit them
+*_executed.ipynb
