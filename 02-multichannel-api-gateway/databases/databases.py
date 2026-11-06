@@ -21,7 +21,7 @@ from aws_cdk import (
 class MessageDatabase(Construct):
     """DynamoDB table with stream for tumbling window message aggregation."""
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, retain_data: bool = False, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         self.table = ddb.Table(
@@ -30,9 +30,16 @@ class MessageDatabase(Construct):
             partition_key=ddb.Attribute(name="from_phone", type=ddb.AttributeType.STRING),
             sort_key=ddb.Attribute(name="id", type=ddb.AttributeType.STRING),
             billing_mode=ddb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.DESTROY,
+            removal_policy=RemovalPolicy.RETAIN if retain_data else RemovalPolicy.DESTROY,
+            deletion_protection=retain_data,
             stream=ddb.StreamViewType.NEW_IMAGE,
             time_to_live_attribute="ttl",
+            encryption=ddb.TableEncryption.AWS_MANAGED,
+            # The table only buffers messages for a few hours, so point-in-time
+            # recovery is turned on only together with `retain_data`.
+            point_in_time_recovery_specification=ddb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=retain_data
+            ),
         )
 
 
@@ -45,7 +52,7 @@ class UserIdentityDatabase(Construct):
     the same long-term memory.
     """
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, retain_data: bool = False, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         self.table = ddb.Table(
@@ -53,7 +60,15 @@ class UserIdentityDatabase(Construct):
             "UnifiedUsersTable",
             partition_key=ddb.Attribute(name="user_id", type=ddb.AttributeType.STRING),
             billing_mode=ddb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.DESTROY,
+            # DESTROY keeps the sample easy to remove. `-c retain_data=true` switches to RETAIN
+            # and deletion protection.
+            removal_policy=RemovalPolicy.RETAIN if retain_data else RemovalPolicy.DESTROY,
+            deletion_protection=retain_data,
+            encryption=ddb.TableEncryption.AWS_MANAGED,
+            # Identity links are the only durable data here, so PITR is always on.
+            point_in_time_recovery_specification=ddb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
         )
 
         # GSI to look up by WhatsApp phone number

@@ -219,13 +219,9 @@ __marimo__/
 *.mp4
 
 
-# Lambda layer installed dependencies (install with pip before deploy)
-02-multichannel-api-gateway/layers/common/python/certifi*/
-02-multichannel-api-gateway/layers/common/python/charset_normalizer*/
-02-multichannel-api-gateway/layers/common/python/idna*/
-02-multichannel-api-gateway/layers/common/python/requests*/
-02-multichannel-api-gateway/layers/common/python/urllib3*/
-02-multichannel-api-gateway/layers/common/python/*dist-info/
 
 # AgentCore deployment package build state
 00-agent-agentcore/agent_files/deployment_package.sha256
+# Stack 02 layer build output (created by layers/build_layer.sh)
+02-multichannel-api-gateway/layers/.build/
+02-multichannel-api-gateway/layers/.build.sha256

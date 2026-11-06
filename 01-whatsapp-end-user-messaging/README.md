@@ -21,7 +21,7 @@ Process text, images, video, audio, and documents from WhatsApp using a 2-Lambda
 - [AWS Account](https://aws.amazon.com/resources/create-account/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Foundational knowledge of Python](https://catalog.us-east-1.prod.workshops.aws/workshops/3d705026-9edc-40e8-b353-bdabb116c89c/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [AWS CLI configured](https://docs.aws.amazon.com/cli/v1/userguide/cli-chap-configure.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with appropriate permissions
-- [Python 3.11](https://www.python.org/downloads/) or later
+- [Python 3.11](https://www.python.org/downloads/) or later (Lambda functions run on Python 3.13, arm64)
 - [AWS Cloud Development Kit (CDK)](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) v2 or later
 - [Have or create a Meta Business Account](https://docs.aws.amazon.com/social-messaging/latest/userguide/getting-started-whatsapp.html#getting-started-embedded?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - Stack `00-agent-agentcore` deployed (provides SSM parameters)
@@ -140,7 +140,6 @@ s3://media-bucket/
 | `lambdas/code/whatsapp_handler/whatsapp_service.py` | Parses SNS/WhatsApp webhook, message extraction, reply/reaction methods |
 | `lambdas/code/whatsapp_handler/agentcore_service.py` | Invokes Amazon Bedrock AgentCore Runtime with actor/session IDs |
 | `lambdas/project_lambdas.py` | CDK construct for Lambda + IAM permissions |
-| `get_param.py` | Reads AgentCore ARN and role ARN from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) at CDK synthesis time |
 
 ## How do I deploy this stack?
 

@@ -23,7 +23,7 @@ The architecture uses a 2-Lambda pipeline with [DynamoDB Streams](https://docs.a
 - [AWS Account](https://aws.amazon.com/resources/create-account/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Foundational knowledge of Python](https://catalog.us-east-1.prod.workshops.aws/workshops/3d705026-9edc-40e8-b353-bdabb116c89c/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [AWS CLI configured](https://docs.aws.amazon.com/cli/v1/userguide/cli-chap-configure.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with appropriate permissions
-- [Python 3.12](https://www.python.org/downloads/) or later
+- [Python 3.11](https://www.python.org/downloads/) or later and [uv](https://docs.astral.sh/uv/) (builds the arm64 Lambda layer during `cdk synth`; Lambda functions run on Python 3.13)
 - [AWS Cloud Development Kit (CDK)](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) v2 or later
 - [Meta Developer account](https://developers.facebook.com/) with WhatsApp Business API access
 - For Instagram: An [Instagram Professional account](https://help.instagram.com/502981923235522) (Business or Creator) linked to [Meta Accounts Center](https://accountscenter.meta.com/) — see [How do I configure Instagram?](#how-do-i-configure-instagram) below
@@ -79,7 +79,7 @@ The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cd
 6. [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) processes the aggregated message with memory context.
 7. Response is dispatched back to the user via the correct channel:
    - **WhatsApp**: `POST https://graph.facebook.com/{phone_id}/messages` with `messaging_product: whatsapp`.
-   - **Instagram**: `POST https://graph.instagram.com/v24.0/{ig_account_id}/messages` with `recipient.id`.
+   - **Instagram**: `POST https://graph.instagram.com/v25.0/{ig_account_id}/messages` with `recipient.id`.
 
 ### How does message buffering work?
 
@@ -146,7 +146,6 @@ The `message_processor` Lambda retries [AgentCore Runtime](https://docs.aws.amaz
 - `layers/common/python/utils.py`: Webhook validation, response builders, phone normalization.
 - `layers/common/python/media_utils.py`: Media download (Graph API), Amazon S3 upload, base64 encoding.
 - `apis/webhooks.py`: Amazon API Gateway REST API construct.
-- `get_param.py`: Reads AgentCore ARN from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) at synthesis time.
 
 ## How do I deploy this?
 
@@ -207,12 +206,13 @@ Edit WhatsApp configuration values in [AWS Secrets Manager](https://aws.amazon.c
 |---|---|---|
 | `WHATS_VERIFICATION_TOKEN` | Webhook verification token. You choose any value — must match the "Verify token" field in Meta webhook configuration (Step 3). | You define it |
 | `WHATS_TOKEN` | Permanent Meta Graph API access token for sending messages. | [Meta Developer Console](https://developers.facebook.com/) → Your App → WhatsApp → API Setup → "Generate permanent token" |
+| `WHATS_APP_SECRET` | **App secret** of your Meta app. The webhook rejects every POST whose `X-Hub-Signature-256` does not match (403), so this value is mandatory. The stack generates a random placeholder. | [Meta Developer Console](https://developers.facebook.com/) → Your App → App settings → Basic → "App secret" |
 | `DISPLAY_PHONE_NUMBER` | WhatsApp Business phone number (with country code, no `+`). Only messages to this number are processed. | [Meta Developer Console](https://developers.facebook.com/) → Your App → WhatsApp → API Setup → "Phone number" (e.g., `1234567890`) |
 
 ```bash
 aws secretsmanager put-secret-value \
   --secret-id <SecretArn from stack output> \
-  --secret-string '{"WHATS_VERIFICATION_TOKEN":"your-verify-token","WHATS_TOKEN":"EAAxxxxxxx","DISPLAY_PHONE_NUMBER":"your-phone-number"}'
+  --secret-string '{"WHATS_VERIFICATION_TOKEN":"your-verify-token","WHATS_TOKEN":"EAAxxxxxxx","WHATS_APP_SECRET":"your-meta-app-secret","DISPLAY_PHONE_NUMBER":"your-phone-number"}'
 ```
 
 ![Secrets Manager](./images/secret.png)
@@ -286,7 +286,7 @@ Your Instagram account must be a **Professional account** (Business or Creator) 
 Use the token from Step 2 to query the [Instagram Graph API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started):
 
 ```bash
-curl -s "https://graph.instagram.com/v24.0/me?fields=user_id,username&access_token=YOUR_IG_TOKEN"
+curl -s -H "Authorization: Bearer YOUR_IG_TOKEN" "https://graph.instagram.com/v25.0/me?fields=user_id,username"
 ```
 
 The response contains your `user_id` — this is the `IG_ACCOUNT_ID` you need.
@@ -298,13 +298,14 @@ Update the Instagram secret in [AWS Secrets Manager](https://aws.amazon.com/secr
 | Secret Key | Description | Where to find it |
 |---|---|---|
 | `IG_TOKEN` | Instagram API access token for sending messages. | [Meta Developer Console](https://developers.facebook.com/) -> Your App -> Instagram -> API setup with Instagram business login -> Generate token |
+| `IG_APP_SECRET` | App secret of the Meta app that owns the Instagram product (same value as `WHATS_APP_SECRET` when both products live in one app). Used to verify `X-Hub-Signature-256`. | Meta Developer Console -> Your App -> App settings -> Basic -> "App secret" |
 | `IG_ACCOUNT_ID` | Your Instagram Professional Account ID. Used to filter out echo messages (messages from your own account). | From the `/me` API call in Step 3, or from the `recipient.id` field in any incoming Instagram webhook payload. |
 | `IG_VERIFICATION_TOKEN` | Webhook verification token for Instagram. You choose any value — must match the "Verify token" field in Meta webhook configuration (Step 5). | You define it |
 
 ```bash
 aws secretsmanager put-secret-value \
   --secret-id <IGSecretArn from stack output> \
-  --secret-string '{"IG_TOKEN":"IGQWRPza...","IG_ACCOUNT_ID":"17841400000000","IG_VERIFICATION_TOKEN":"your-ig-verify-token"}'
+  --secret-string '{"IG_TOKEN":"IGQWRPza...","IG_APP_SECRET":"your-meta-app-secret","IG_ACCOUNT_ID":"17841400000000","IG_VERIFICATION_TOKEN":"your-ig-verify-token"}'
 ```
 
 ### Step 5: Configure Instagram Webhook
@@ -336,7 +337,7 @@ A **unified users table** maps WhatsApp phone numbers and Instagram IDs to a sin
 Instagram webhooks only send a numeric `sender.id` (Instagram Scoped ID) — not the username. The `webhook_receiver` Lambda calls the [Instagram Graph API](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started) to resolve the profile:
 
 ```
-GET https://graph.instagram.com/v24.0/{sender_id}?fields=name,username&access_token={IG_TOKEN}
+GET https://graph.instagram.com/v25.0/{sender_id}?fields=name,username   (Authorization: Bearer {IG_TOKEN})
 ```
 
 This returns the user's `name` (display name) and `username` (the `@handle`). Both are stored in the DynamoDB message item (`contact_name` and `ig_username`) and in the unified users table. The profile is cached in-memory during each Lambda invocation to avoid repeated API calls for the same sender.
