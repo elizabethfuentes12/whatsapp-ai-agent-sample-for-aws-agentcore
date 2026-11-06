@@ -4,15 +4,23 @@ Video analysis tool using TwelveLabs API.
 Uses TwelveLabs SDK for uploads (handles multipart/form-data) and
 requests for queries and listing. Video IDs and metadata are returned
 so the agent can store them in memory for follow-up questions.
+
+Hardening: inputs are validated, every network call has a timeout, the API key
+is cached with a TTL and never logged, and callers only ever see generic error
+messages (details go to the logs as exception class names).
 """
 
-import os
 import json
 import logging
-from typing import Dict
+import os
+import re
+import threading
+import time
+from typing import Dict, Optional, Tuple
 
 import boto3
 import requests
+from botocore.config import Config
 from strands import tool
 
 logger = logging.getLogger(__name__)
@@ -22,37 +30,93 @@ TL_BASE_URL = "https://api.twelvelabs.io/v1.3"
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 DEFAULT_INDEX_NAME = os.environ.get("TL_INDEX_NAME", "whatsapp-video-index")
 TL_MODEL_NAME = os.environ.get("TL_MODEL_NAME", "pegasus1.2")
+S3_BUCKET = os.environ.get("S3_BUCKET", "")  # when set, uploads are limited to this bucket
 S3_PRESIGNED_EXPIRY = 3600  # 1 hour
 
-_cached_api_key = None
+# Network and polling limits (seconds)
+REQUEST_TIMEOUT = (5, 60)  # connect, read
+GIST_TIMEOUT = (5, 30)
+INDEXING_TIMEOUT = int(os.environ.get("TL_INDEXING_TIMEOUT_SECONDS", "540"))
+INDEXING_POLL_INTERVAL = 5
+SECRET_TTL_SECONDS = 3600
+MAX_LISTED_VIDEOS = 100
+
+# Input limits
+MAX_PROMPT_CHARS = 2000
+MAX_NAME_CHARS = 200
+VALID_ACTIONS = ("upload", "query", "list_videos")
+
+_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-]{6,64}$")
+_INDEX_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\- ]{0,63}$")
+_S3_URI_PATTERN = re.compile(r"^s3://([a-z0-9][a-z0-9.\-]{1,61}[a-z0-9])/([^\s]+)$")
+_HTTPS_URL_PATTERN = re.compile(r"^https://[^\s]+$")
+
+_secret_lock = threading.Lock()
+_cached_api_key: Optional[Tuple[str, float]] = None
+
+
+def _error(message: str) -> Dict:
+    return {"status": "error", "content": [{"text": message}]}
+
+
+GENERIC_ERROR = "Video analysis had a technical issue. Tell the user you could not process the video right now."
 
 
 def _get_api_key() -> str:
-    """Retrieve TwelveLabs API key from Secrets Manager (cached after first call)."""
+    """Retrieve the TwelveLabs API key from Secrets Manager (cached with a TTL)."""
     global _cached_api_key
-    if _cached_api_key:
-        return _cached_api_key
+    with _secret_lock:
+        now = time.monotonic()
+        if _cached_api_key and now - _cached_api_key[1] < SECRET_TTL_SECONDS:
+            return _cached_api_key[0]
 
-    if not TL_SECRET_ARN:
-        raise ValueError("TL_SECRET_ARN environment variable not set.")
+        if not TL_SECRET_ARN:
+            raise ValueError("TL_SECRET_ARN is not set")
 
-    sm = boto3.client("secretsmanager", region_name=REGION)
-    resp = sm.get_secret_value(SecretId=TL_SECRET_ARN)
-    secret = json.loads(resp["SecretString"])
-    _cached_api_key = secret["TL_API_KEY"]
-    return _cached_api_key
+        sm = boto3.client(
+            "secretsmanager",
+            region_name=REGION,
+            config=Config(connect_timeout=5, read_timeout=10, retries={"max_attempts": 3, "mode": "standard"}),
+        )
+        resp = sm.get_secret_value(SecretId=TL_SECRET_ARN)
+        api_key = json.loads(resp["SecretString"]).get("TL_API_KEY", "")
+        if not api_key or api_key == "CHANGE_ME":
+            raise ValueError("TL_API_KEY has not been configured")
+        _cached_api_key = (api_key, now)
+        return api_key
 
 
 def _get_tl_headers() -> dict:
     return {"x-api-key": _get_api_key()}
 
 
+def validate_video_location(video_path: Optional[str]) -> Optional[str]:
+    """Return an error message when video_path is not an allowed S3 URI or HTTPS URL."""
+    if not video_path or not isinstance(video_path, str) or len(video_path) > 2048:
+        return "video_path is required for upload."
+    match = _S3_URI_PATTERN.match(video_path)
+    if match:
+        if S3_BUCKET and match.group(1) != S3_BUCKET:
+            return "That video location is not allowed."
+        return None
+    if _HTTPS_URL_PATTERN.match(video_path):
+        return None
+    return "video_path must be an s3:// URI or an https:// URL."
+
+
+def validate_video_id(video_id: Optional[str]) -> bool:
+    return isinstance(video_id, str) and bool(_VIDEO_ID_PATTERN.match(video_id))
+
+
 def _generate_presigned_url(s3_uri: str) -> str:
     """Convert s3://bucket/key to a pre-signed URL for TwelveLabs."""
-    parts = s3_uri.replace("s3://", "").split("/", 1)
-    bucket = parts[0]
-    key = parts[1]
-    s3_client = boto3.client("s3", region_name=REGION)
+    match = _S3_URI_PATTERN.match(s3_uri)
+    if not match:
+        raise ValueError("invalid S3 URI")
+    bucket, key = match.group(1), match.group(2)
+    s3_client = boto3.client(
+        "s3", region_name=REGION, config=Config(connect_timeout=5, read_timeout=10, signature_version="s3v4")
+    )
     return s3_client.generate_presigned_url(
         "get_object",
         Params={"Bucket": bucket, "Key": key},
@@ -68,8 +132,8 @@ def _get_or_create_index(client, index_name: str):
         for index in client.indexes.list():
             if index.index_name == index_name:
                 return index
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 - fall through and create the index
+        logger.warning("index_list_failed", extra={"fields": {"error": type(exc).__name__}})
 
     return client.indexes.create(
         index_name=index_name,
@@ -80,6 +144,18 @@ def _get_or_create_index(client, index_name: str):
             )
         ],
     )
+
+
+def _wait_for_indexing(client, task_id: str):
+    """Poll the indexing task until it finishes or INDEXING_TIMEOUT elapses."""
+    deadline = time.monotonic() + INDEXING_TIMEOUT
+    while True:
+        task = client.tasks.retrieve(task_id)
+        if task.status in ("ready", "failed"):
+            return task
+        if time.monotonic() >= deadline:
+            return task
+        time.sleep(INDEXING_POLL_INTERVAL)
 
 
 @tool
@@ -108,74 +184,78 @@ def video_analysis(
         video_name: Human-readable name for the video (upload only).
         prompt: Question about the video content (query only).
         index_name: TwelveLabs index name.
-        temperature: Model temperature for query responses.
+        temperature: Model temperature for query responses (0.0 to 1.0).
 
     Returns:
         Dict with operation results.
     """
     if not TL_SECRET_ARN:
-        return {
-            "status": "error",
-            "content": [{"text": "TL_SECRET_ARN environment variable not set."}],
-        }
+        logger.error("video_analysis_not_configured")
+        return _error("Video analysis is not configured.")
+
+    if action not in VALID_ACTIONS:
+        return _error(f"Invalid action. Use one of: {', '.join(VALID_ACTIONS)}.")
+
+    if not isinstance(index_name, str) or not _INDEX_NAME_PATTERN.match(index_name):
+        index_name = DEFAULT_INDEX_NAME
+    try:
+        temperature = min(1.0, max(0.0, float(temperature)))
+    except (TypeError, ValueError):
+        temperature = 0.2
+    if video_name is not None:
+        video_name = str(video_name)[:MAX_NAME_CHARS]
 
     try:
         if action == "upload":
             return _handle_upload(video_path, video_name, index_name)
-        elif action == "query":
+        if action == "query":
             return _handle_query(video_path, prompt, temperature)
-        elif action == "list_videos":
-            return _handle_list_videos()
-        else:
-            return {
-                "status": "error",
-                "content": [{"text": f"Invalid action: {action}. Use upload, query, or list_videos."}],
-            }
-    except Exception as e:
-        logger.error("video_analysis failed: action=%s, error=%s", action, str(e), exc_info=True)
-        return {
-            "status": "error",
-            "content": [{"text": f"Video analysis failed: {str(e)}"}],
-        }
+        return _handle_list_videos()
+    except Exception as exc:  # noqa: BLE001 - details stay in the logs, the model gets a generic message
+        logger.error("video_analysis_failed", extra={"fields": {"action": action, "error": type(exc).__name__}})
+        return _error(GENERIC_ERROR)
 
 
-def _handle_upload(video_path: str, video_name: str, index_name: str) -> Dict:
+def _handle_upload(video_path: str, video_name: Optional[str], index_name: str) -> Dict:
     """Upload video to TwelveLabs for indexing using the SDK."""
-    if not video_path:
-        return {"status": "error", "content": [{"text": "video_path required for upload."}]}
+    problem = validate_video_location(video_path)
+    if problem:
+        return _error(problem)
 
     from twelvelabs import TwelveLabs
 
-    api_key = _get_api_key()
-    client = TwelveLabs(api_key=api_key)
+    client = TwelveLabs(api_key=_get_api_key(), timeout=REQUEST_TIMEOUT[1])
     index = _get_or_create_index(client, index_name)
 
-    # Convert S3 URI to pre-signed URL
+    # Convert S3 URI to pre-signed URL (never logged: it carries a signature)
     video_url = video_path
     if video_path.startswith("s3://"):
         video_url = _generate_presigned_url(video_path)
-        logger.info("Generated pre-signed URL for %s", video_path)
 
-    # Upload via SDK (handles multipart/form-data)
-    logger.info("TwelveLabs upload: index=%s, url_length=%d", index.id, len(video_url))
+    logger.info("tl_upload_start", extra={"fields": {"index_id": index.id}})
     task = client.tasks.create(index_id=index.id, video_url=video_url)
-    task = client.tasks.wait_for_done(task_id=task.id)
+    task = _wait_for_indexing(client, task.id)
 
     if task.status != "ready":
-        return {"status": "error", "content": [{"text": f"Video indexing failed: status={task.status}"}]}
+        logger.error("tl_indexing_incomplete", extra={"fields": {"status": task.status}})
+        return _error("The video could not be indexed in time. Tell the user to try again later.")
 
     video_id = task.video_id
-    logger.info("Video indexed: video_id=%s", video_id)
+    logger.info("tl_video_indexed", extra={"fields": {"video_id": video_id}})
 
     # Get metadata/insights via REST API (SDK gist() not available in all versions)
-    headers = _get_tl_headers()
-    gist_resp = requests.post(
-        f"{TL_BASE_URL}/gist",
-        headers=headers,
-        json={"video_id": video_id, "types": ["title", "topic", "hashtag"]},
-        timeout=30,
-    )
-    gist_data = gist_resp.json() if gist_resp.status_code == 200 else {}
+    gist_data: dict = {}
+    try:
+        gist_resp = requests.post(
+            f"{TL_BASE_URL}/gist",
+            headers=_get_tl_headers(),
+            json={"video_id": video_id, "types": ["title", "topic", "hashtag"]},
+            timeout=GIST_TIMEOUT,
+        )
+        if gist_resp.status_code == 200:
+            gist_data = gist_resp.json()
+    except requests.RequestException as exc:
+        logger.warning("tl_gist_failed", extra={"fields": {"error": type(exc).__name__}})
 
     return {
         "status": "success",
@@ -191,26 +271,28 @@ def _handle_upload(video_path: str, video_name: str, index_name: str) -> Dict:
     }
 
 
-def _handle_query(video_id: str, prompt: str, temperature: float) -> Dict:
+def _handle_query(video_id: Optional[str], prompt: Optional[str], temperature: float) -> Dict:
     """Query an indexed video using TwelveLabs analyze API."""
-    if not video_id or not prompt:
-        return {"status": "error", "content": [{"text": "video_id and prompt required for query."}]}
-
-    headers = _get_tl_headers()
+    if not validate_video_id(video_id):
+        return _error("A valid video_id is required for query.")
+    if not prompt or not isinstance(prompt, str):
+        return _error("A prompt is required for query.")
+    prompt = prompt[:MAX_PROMPT_CHARS]
 
     response = requests.post(
         f"{TL_BASE_URL}/analyze",
-        headers=headers,
+        headers=_get_tl_headers(),
         json={
             "video_id": video_id,
             "prompt": prompt,
             "temperature": temperature,
         },
-        timeout=60,
+        timeout=REQUEST_TIMEOUT,
     )
 
     if response.status_code != 200:
-        return {"status": "error", "content": [{"text": f"Query failed: {response.text}"}]}
+        logger.error("tl_query_failed", extra={"fields": {"http_status": response.status_code}})
+        return _error(GENERIC_ERROR)
 
     text_parts = []
     for line in response.text.strip().split("\n"):
@@ -235,25 +317,28 @@ def _handle_query(video_id: str, prompt: str, temperature: float) -> Dict:
 
 
 def _handle_list_videos() -> Dict:
-    """List all indexed videos across all indexes."""
+    """List indexed videos across all indexes (capped at MAX_LISTED_VIDEOS)."""
     headers = _get_tl_headers()
 
     indexes_resp = requests.get(
         f"{TL_BASE_URL}/indexes",
         headers=headers,
         params={"model_family": "pegasus"},
-        timeout=30,
+        timeout=GIST_TIMEOUT,
     )
     if indexes_resp.status_code != 200:
-        return {"status": "error", "content": [{"text": f"Failed to list indexes: {indexes_resp.text}"}]}
+        logger.error("tl_list_indexes_failed", extra={"fields": {"http_status": indexes_resp.status_code}})
+        return _error(GENERIC_ERROR)
 
     all_videos = []
     for index in indexes_resp.json().get("data", []):
+        if len(all_videos) >= MAX_LISTED_VIDEOS:
+            break
         if index.get("video_count", 0) > 0:
             videos_resp = requests.get(
                 f"{TL_BASE_URL}/indexes/{index['_id']}/videos",
                 headers=headers,
-                timeout=30,
+                timeout=GIST_TIMEOUT,
             )
             if videos_resp.status_code == 200:
                 for video in videos_resp.json().get("data", []):
@@ -263,6 +348,7 @@ def _handle_list_videos() -> Dict:
                         "index_name": index["index_name"],
                     })
 
+    all_videos = all_videos[:MAX_LISTED_VIDEOS]
     return {
         "status": "success",
         "content": [{

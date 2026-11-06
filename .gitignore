@@ -226,3 +226,6 @@ __marimo__/
 02-multichannel-api-gateway/layers/common/python/requests*/
 02-multichannel-api-gateway/layers/common/python/urllib3*/
 02-multichannel-api-gateway/layers/common/python/*dist-info/
+
+# AgentCore deployment package build state
+00-agent-agentcore/agent_files/deployment_package.sha256

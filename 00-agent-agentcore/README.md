@@ -67,7 +67,7 @@ Both the LLM (Large Language Model) and the video analysis model are configurabl
 
 | Variable | Default | Description | How to change |
 |----------|---------|-------------|---------------|
-| `MODEL_ID` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | [Anthropic Claude](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) model for the agent | Set `MODEL_ID` env var before deploy. See [supported models](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). |
+| `MODEL_ID` | `global.anthropic.claude-sonnet-4-6` | [Anthropic Claude](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) model for the agent | Set `MODEL_ID` env var before deploy. See [supported models](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). |
 | `TL_MODEL_NAME` | `pegasus1.2` | [TwelveLabs Pegasus](https://docs.twelvelabs.io/docs/concepts/models) model for video analysis | Set `TL_MODEL_NAME` env var before deploy. See [TwelveLabs models](https://docs.twelvelabs.io/docs/concepts/models). |
 
 Example — deploy with a different Claude model:
@@ -100,7 +100,7 @@ The agent automatically creates a TwelveLabs index (`whatsapp-video-index`) on f
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AWS_REGION` | `us-east-1` | AWS region for all API calls |
-| `MODEL_ID` | `us.anthropic.claude-sonnet-4-20250514-v1:0` | [Claude model ID](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
+| `MODEL_ID` | `global.anthropic.claude-sonnet-4-6` | [Claude model ID](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
 | `TL_MODEL_NAME` | `pegasus1.2` | [TwelveLabs model](https://docs.twelvelabs.io/docs/concepts/models) for video indexing |
 | `TL_SECRET_ARN` | Set by stack | Secrets Manager ARN for TwelveLabs API key |
 | `BEDROCK_AGENTCORE_MEMORY_ID` | Set by stack | AgentCore Memory resource ID |
