@@ -1,7 +1,5 @@
 # Multichannel AI Agent for WhatsApp and Instagram with Amazon Bedrock AgentCore
 
-> **Last updated**: 2026-03-30
-
 | Voice notes | Image |
 |----------|------------|
 |![Voice notes](./images/voice-note.gif)| ![Image](./images/image-whatsapp-agent.gif) |
@@ -10,272 +8,199 @@
 |--------------|--------------|
 |![Video](./images/video-whatsapp-agent.gif)|![Instagram](./images/chat-instagram-agent.gif)|
 
-A channel-agnostic multimodal AI agent that processes text, images, audio, video, and documents across WhatsApp and Instagram using [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). One deployed agent serves multiple messaging platforms with persistent cross-channel memory — a user who sends an image on WhatsApp and asks a follow-up on Instagram gets a unified experience.
+A channel-agnostic multimodal AI agent for text, images, audio, video and documents, reachable from WhatsApp and Instagram. It is built with [Strands Agents](https://strandsagents.com/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) and runs on [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) Runtime with AgentCore Memory, so one deployed agent remembers a person across channels.
 
-The agent runs on [AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with [AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), supports 6 media types (text, image, audio, video, document, and voice notes), and includes 2 WhatsApp integration patterns plus Instagram DM support. A DynamoDB Streams tumbling window reduces AgentCore invocations by approximately 75% through message buffering.
+This sample works with Amazon Bedrock AgentCore.
 
-> **Important**: This is a **demo project** intended for learning and experimentation purposes only. It is **not designed for production use**. The goal is to illustrate architectural patterns and integration techniques that can serve as inspiration for building your own production-grade solutions. If you plan to use these patterns in a production environment, make sure to implement proper security hardening, error handling, scalability testing, and operational monitoring.
+> Code in this repository is provided "as is", and is not officially supported by Amazon.
 
-> **Complexity note**: This guide assumes familiarity with [AWS CDK](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), [AWS Lambda](https://aws.amazon.com/lambda/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), WhatsApp Business API, and [Amazon Bedrock AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). A Quick Start is in the [Deployment Sequence](#how-do-i-deploy) section. Similar agent patterns can be applied using [LangGraph](https://github.com/langchain-ai/langgraph), [AutoGen](https://github.com/microsoft/autogen), or the [Amazon Bedrock Agents SDK](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html). This sample uses [Strands Agents](https://strandsagents.com/) for its lightweight tool integration model.
-
-## Architecture
-
-![Architecture Overview — Three CDK stacks: AgentCore Runtime with Memory, WhatsApp via SNS, and multichannel via API Gateway with DynamoDB buffering](./images/diagram.svg)
+> **Demo project**: this sample illustrates architecture and integration patterns for learning. It already includes webhook signature verification, scoped IAM and idempotent message handling, but it has not been through a production readiness review, load test or live validation of every path (see [What was not validated?](#what-was-not-validated)). Review security, cost and operations before you adapt it.
 
 ## Projects
 
 | Project | Description | Stack |
 |---------|-------------|-------|
-| [00-agent-agentcore](./00-agent-agentcore/) | Standalone Amazon Bedrock AgentCore Runtime with multimodal [Strands Agents](https://strandsagents.com/) + AgentCore Memory. Exports configuration to SSM (Systems Manager) Parameter Store. | ![Python](https://img.shields.io/badge/Python-3.11-blue) ![AgentCore](https://img.shields.io/badge/AWS-AgentCore-orange) ![Strands](https://img.shields.io/badge/Strands-Agents-green) |
-| [01-whatsapp-end-user-messaging](./01-whatsapp-end-user-messaging/) | WhatsApp via [AWS End User Messaging Social](https://aws.amazon.com/end-user-messaging/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) (Amazon SNS -> AWS Lambda -> AgentCore) | ![Python](https://img.shields.io/badge/Python-3.11-blue) ![CDK](https://img.shields.io/badge/AWS-CDK-orange) ![SNS](https://img.shields.io/badge/AWS-SNS-yellow) |
-| [02-multichannel-api-gateway](./02-multichannel-api-gateway/) | WhatsApp + Instagram DM via [Meta Cloud API](https://developers.facebook.com/docs/graph-api/) (Amazon API Gateway -> Amazon DynamoDB Stream -> AWS Lambda pipeline -> AgentCore). Dual-channel: single webhook serves both platforms. | ![Python](https://img.shields.io/badge/Python-3.12-blue) ![CDK](https://img.shields.io/badge/AWS-CDK-orange) ![APIGW](https://img.shields.io/badge/AWS-API_Gateway-purple) ![Instagram](https://img.shields.io/badge/Meta-Instagram-E4405F) |
-| [notebook](./notebook/) | Jupyter notebook to test the deployed agent directly | ![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-orange) |
+| [00-agent-agentcore](./00-agent-agentcore/) | AgentCore Runtime (direct code deploy) with the Strands multimodal agent, AgentCore Memory, media bucket and TwelveLabs secret. Publishes its ARNs to SSM Parameter Store. | ![Python](https://img.shields.io/badge/Python-3.13-blue) ![AgentCore](https://img.shields.io/badge/AWS-AgentCore-orange) ![Strands](https://img.shields.io/badge/Strands-Agents-green) |
+| [01-whatsapp-end-user-messaging](./01-whatsapp-end-user-messaging/) | WhatsApp through [AWS End User Messaging Social](https://aws.amazon.com/end-user-messaging/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el): SNS, Lambda, DynamoDB Stream buffering, AgentCore. | ![Python](https://img.shields.io/badge/Python-3.13-blue) ![CDK](https://img.shields.io/badge/AWS-CDK-orange) ![SNS](https://img.shields.io/badge/AWS-SNS-yellow) |
+| [02-multichannel-api-gateway](./02-multichannel-api-gateway/) | WhatsApp and Instagram DM through the [Meta Cloud API](https://developers.facebook.com/docs/graph-api/): one API Gateway webhook with HMAC signature verification, Lambda, DynamoDB Stream buffering, AgentCore, unified users table. | ![Python](https://img.shields.io/badge/Python-3.13-blue) ![CDK](https://img.shields.io/badge/AWS-CDK-orange) ![APIGW](https://img.shields.io/badge/AWS-API_Gateway-purple) ![Instagram](https://img.shields.io/badge/Meta-Instagram-E4405F) |
+| [notebook](./notebook/) | Notebooks to test the deployed runtime, or the agent code locally, without a messaging channel. | ![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-orange) |
+
+## How is the solution built?
+
+![Architecture overview: three CDK stacks. Stack 00 deploys the AgentCore Runtime and Memory. Stack 01 connects WhatsApp through SNS. Stack 02 connects WhatsApp and Instagram through API Gateway. Both channel stacks buffer messages in DynamoDB before calling the runtime](./images/diagram.svg)
+
+Choose one channel stack after stack 00: stack 01 if you use AWS End User Messaging Social for WhatsApp, stack 02 if you use a Meta app for WhatsApp and Instagram. The stacks are independent CDK apps that share configuration through SSM parameters (`/agentcore/*`).
+
+## What changed in this version?
+
+The sample was audited against the current Strands Agents, AgentCore, Lambda, API Gateway and Meta documentation. The full list, with sources and final statuses, is in [docs/AUDIT.md](./docs/AUDIT.md).
+
+| Area | Now |
+|------|-----|
+| Model | `global.anthropic.claude-sonnet-4-6` by default (the previous Sonnet 4 default reached end of life on 2026-10-14). Change it with `-c model_id=...`. |
+| Runtime | AgentCore Runtime on Python 3.13 (arm64). Lambdas on Python 3.13 (arm64). |
+| Agent | One Strands agent per request, conversation window, turn and token limits, prompt caching, optional Bedrock Guardrail, tool-safety plugin, JSON logs with hashed IDs. |
+| Memory | Facts, preferences, summaries and episodes with explicit namespaces, 30 day event expiry. |
+| Webhook security | `X-Hub-Signature-256` verified with the Meta app secret (`WHATS_APP_SECRET`, `IG_APP_SECRET`), no CORS, throttling, request validation. |
+| Reliability | Conditional-put deduplication (Meta retries for up to 36 hours), per-message claims, stream retry limits, bisect and SQS failure destination. |
+| IAM | Scoped to the runtime, the model and the resource name patterns. No wildcard resources except the two actions that do not support resource scoping. |
+| Tests | 76 + 41 + 72 offline tests, and `cdk synth` for all three stacks without AWS credentials. |
 
 ## Why is this multichannel by design?
 
-The AgentCore Runtime and Memory layer is completely decoupled from WhatsApp. The same deployed agent can serve **any** frontend channel without modification.
+The AgentCore Runtime and Memory layer knows nothing about WhatsApp. Any system that can call [InvokeAgentRuntime](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) can be a frontend.
 
-### How cross-channel memory works
+### How does cross-channel memory work?
 
-Memory in AgentCore is keyed by two identifiers:
+AgentCore Memory is keyed by two identifiers. The `actor_id` identifies the person and drives long-term memory (facts, preferences, summaries, episodes). The `session_id` identifies the conversation and drives short-term memory. If two frontends send the same `actor_id` for the same person, the agent remembers that person on both. Stack 02 does this with a unified users table: when a user links WhatsApp and Instagram, both resolve to one `actor_id`.
 
-- **`actor_id`** identifies the **user** (for example, `wa-user-{phone}`). This drives long-term memory: facts, preferences, and summaries that persist indefinitely across all sessions.
-- **`session_id`** identifies the **conversation**. This drives short-term memory: conversation turns that expire after a configurable TTL (Time To Live).
+Both IDs must be different strings of at least 33 characters; the Lambdas pad them with `ljust(33, "0")`.
 
-The critical insight: if multiple frontends generate the **same `actor_id`** for the same person, the agent remembers everything about that person across all channels. A user who shares a product image on WhatsApp, asks a follow-up question via Instagram Direct Messages, and later opens a web chat will have a single unified memory profile — the agent recalls the image description, the follow-up answer, and all extracted facts.
-
-### What channels can connect to this agent?
-
-Any system capable of calling the [AgentCore Runtime `InvokeAgentRuntime` API](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) can serve as a frontend:
+### Which channels can connect?
 
 | Channel | Integration path | `actor_id` strategy |
 |---------|-----------------|---------------------|
-| **WhatsApp** (AWS End User Messaging) | SNS -> Lambda -> AgentCore (Stack 01) | `wa-user-{phone}` |
-| **WhatsApp** (Meta Cloud API) | API Gateway -> DynamoDB -> Lambda -> AgentCore (Stack 02) | `wa-user-{phone}` |
-| **Instagram Direct Messages** | Shared webhook -> DynamoDB -> Lambda -> AgentCore (Stack 02) | `ig-user-{instagram_scoped_id}` |
-| **Telegram** | [Telegram Bot API](https://core.telegram.org/bots/api) webhook -> Lambda -> AgentCore | `tg-user-{chat_id}` |
-| **Facebook Messenger** | [Meta Webhooks](https://developers.facebook.com/docs/messenger-platform/webhooks) -> Lambda -> AgentCore | `fb-user-{page_scoped_id}` |
-| **Custom web chat** | WebSocket or REST API -> Lambda -> AgentCore | `web-user-{authenticated_user_id}` |
-| **Mobile app** | REST API -> Lambda -> AgentCore | `app-user-{authenticated_user_id}` |
-
-To unify memory across channels for the same person, map all channels to a single canonical `actor_id` (for example, using an authenticated user ID or a CRM identifier instead of channel-specific IDs).
+| WhatsApp (End User Messaging Social) | SNS, Lambda, AgentCore (stack 01) | `wa-user-{phone}` |
+| WhatsApp (Meta Cloud API) | API Gateway, DynamoDB, Lambda, AgentCore (stack 02) | `wa-user-{phone}`, or the linked user id |
+| Instagram Direct Messages | Same webhook (stack 02) | `ig-user-{instagram_scoped_id}`, or the linked user id |
+| Telegram, Messenger, web chat, mobile app | Your own receiver that calls AgentCore | Your canonical user id |
 
 ## How does multimedia memory work?
 
-[Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) only stores **text**. All multimedia is converted to text understanding before entering memory.
+AgentCore Memory stores text only, so media becomes text before it is remembered.
 
-When a user sends multimedia:
-
-1. **Image** — The agent analyzes the image using [Anthropic Claude's vision capabilities](https://docs.anthropic.com/en/docs/build-with-claude/vision) (inline content blocks), creates a detailed text description, and that description is stored in memory.
-2. **Audio** — [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) converts speech to text in the Lambda function. The transcript is then sent to the agent as a text prompt.
-3. **Video** — The agent uses a `video_analysis` tool powered by [TwelveLabs](https://www.twelvelabs.io/) for rich visual and audio understanding (scenes, actions, on-screen text, spoken words). The text analysis is stored in memory with a `[VIDEO: id=X | desc="Y"]` tag for follow-up queries.
-4. **Document** (PDF, DOCX, and others) — The agent reads the document via inline content blocks, summarizes the content, and stores the summary in memory.
-
-Media files are organized in Amazon S3 by type: `images/`, `voice/`, `video/`, `documents/`.
-
-The agent can answer follow-up questions about any previously shared multimedia using the stored text understanding, even after the original session expires.
-
-## What media formats are supported?
+1. **Image**: Claude vision reads it as an inline content block and the description enters memory.
+2. **Audio**: [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) turns it into text in the Lambda and the transcript goes to the agent.
+3. **Video**: the `video_analysis` tool calls the [TwelveLabs](https://www.twelvelabs.io/) API. The agent keeps a `[VIDEO: id=... | desc="..."]` tag for follow-up questions.
+4. **Document**: the agent reads PDF, DOCX and similar files as inline blocks and stores a summary.
 
 | Media | Formats | Limits |
 |-------|---------|--------|
-| **Image** | JPEG, PNG, GIF, WebP | Max 5 MB per image. Max resolution 8000x8000 px (optimal under 1568 px on longest edge) |
-| **Document** | PDF, CSV, DOC, DOCX, XLS, XLSX, HTML, TXT, MD | Max ~1.5 MB via WhatsApp. PDFs up to 600 pages |
-| **Audio** | OGG, MP3, AAC, M4A, WAV, AMR | Any format WhatsApp supports. Automatically transcribed via [Amazon Transcribe](https://aws.amazon.com/transcribe/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) |
-| **Video** | MP4, MOV, MKV, WebM, FLV, MPEG, 3GP | Max 2 GB / 1 hour. Minimum ~4 seconds. Standard codec required (H.264/H.265). Analyzed via [TwelveLabs](https://www.twelvelabs.io/) |
+| Image | JPEG, PNG, GIF, WebP | About 1.5 MB decoded sent to the agent. |
+| Document | PDF, CSV, DOC, DOCX, XLS, XLSX, HTML, TXT, MD | About 1.5 MB decoded. |
+| Audio | OGG, MP3, AAC, M4A, WAV, AMR | Transcribed by Amazon Transcribe. |
+| Video | MP4, MOV, MKV, WebM, FLV, MPEG, 3GP | Analyzed by TwelveLabs through a presigned S3 URL. |
 
-## How does message buffering reduce costs?
+Larger images and documents get a friendly "too large" reply instead of reaching the runtime, because the `InvokeAgentRuntime` payload is limited.
 
-WhatsApp users frequently send multiple messages in quick succession — breaking a thought into 2-5 rapid-fire messages instead of a single long one. Without buffering, each message triggers a separate AgentCore Runtime invocation, consuming tokens and incurring costs for every fragment.
+## How does message buffering work?
 
-This project implements a **DynamoDB Streams tumbling window** pattern (inspired by [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat)) that accumulates messages from the same user within a configurable time window (default: 20 seconds) and sends them as a **single concatenated prompt** to the agent.
+People send several short messages in a row. Without buffering each one starts a separate agent call. Stacks 01 and 02 write each message to DynamoDB (partition key `from_phone`, sort key `id`) and read the table stream with a Lambda [tumbling window](https://docs.aws.amazon.com/lambda/latest/dg/services-ddb-windows.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). The window is 20 seconds in stack 01 and 10 seconds in stack 02 (the `buffer_seconds` argument of the Lambda construct). The processor groups messages by sender, joins the text and calls the agent once.
 
-### How it works
+The pattern comes from [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat), which reports roughly 4 messages per aggregate. That ratio was not measured in this repository; your saving depends on how your users type.
 
-1. Each incoming message is saved to Amazon DynamoDB with `from_phone` as partition key, ensuring all messages from the same user land in the same shard.
-2. [DynamoDB Streams](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) captures the INSERT events.
-3. The Lambda event source mapping uses a **tumbling window** (`tumbling_window` + `max_batching_window`) to hold records for 20 seconds before invoking the processor.
-4. The processor groups messages by sender, concatenates text with newlines, and invokes AgentCore **once** per user.
-
-### Cost impact
-
-| Metric | Without buffering | With buffering (20s window) |
-|--------|------------------|-----------------------------|
-| AgentCore Runtime invocations | 1 per message | 1 per batch (~4:1 ratio) |
-| LLM (Large Language Model) tokens consumed | Full context per fragment | Single context for all fragments |
-| Estimated savings | baseline | **~75% fewer invocations** |
-
-The 4:1 aggregation ratio and 75% savings estimate is based on real-world WhatsApp usage patterns reported by [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat).
+Retries are safe. A conditional put on `(from_phone, id)` makes Meta's redeliveries harmless, and the processor claims each message before it works on it.
 
 ## How do AgentCore Runtime sessions work?
 
-Each [AgentCore Runtime session](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) runs in an isolated microVM with dedicated compute, memory, and filesystem.
+Each [session](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) runs in an isolated microVM for up to 8 hours and ends after 15 minutes without requests. After you redeploy the agent, wait for the idle timeout or use a new `session_id` to get the new code.
 
-| Parameter | Value |
-|-----------|-------|
-| **Maximum session duration** | 8 hours |
-| **Idle timeout** | 15 minutes of inactivity |
-| **Isolation** | Dedicated microVM per session |
+## How do I test it without a messaging channel?
 
-Sessions progress: **Active** (processing requests) -> **Idle** (available for future calls) -> **Terminated** (microVM destroyed, memory sanitized). After redeploying agent code or updating IAM role permissions, wait for the idle timeout or start a new session to pick up changes.
+Both [notebooks](./notebook/) run without WhatsApp or Instagram. `test_agentcore_deployed.ipynb` invokes the deployed runtime. `test_multimodal_agent.ipynb` runs the agent code on your machine without memory. Open them in JupyterLab or VS Code.
 
-## How do sessions and identity work in AgentCore Memory?
+For automated checks, each stack has an offline test suite and the repository has a hygiene check:
 
-[Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) operates on two layers:
+```bash
+cd 00-agent-agentcore   # or 01-... or 02-...
+uv venv .venv --python 3.11 && source .venv/bin/activate
+uv pip install -r requirements-dev.txt   # stack 00 also installs the runtime packages, see its README
+python -m pytest -q
 
-| Layer | Scope | What it stores | Lifetime |
-|-------|-------|----------------|----------|
-| **Short-term** | Per session | Conversation turns (events) | Expires per configured TTL (default 3 days, minimum allowed by the API) |
-| **Long-term** | Per actor (cross-session) | Extracted facts, preferences, summaries | Persists indefinitely |
+export AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=x CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1
+npx --yes aws-cdk@latest synth --quiet   # no AWS account needed
 
-Two IDs drive this separation:
-
-| ID | Format | Identifies | Purpose |
-|----|--------|-----------|---------|
-| `actor_id` | `wa-user-{phone}` | The **user** | Long-term memory — facts and preferences that persist across all sessions |
-| `session_id` | `wa-chat-{phone}` | The **conversation** | Short-term memory — conversation turns that expire per the TTL |
-
-The SDK enforces that `session_id` and `actor_id` must be different strings. They serve distinct purposes: the actor is *who* the user is; the session is *which conversation* they are in.
-
-**How it flows**:
-
+cd .. && python scripts/check_repo.py    # placeholders, TRK links, em dashes, retired model ID, README sections, notebook outputs
 ```
-Frontend generates:
-  actor_id   = "wa-user-{phone}"    (padded to 33 chars)
-  session_id = "wa-chat-{phone}"    (padded to 33 chars)
-
-Calls InvokeAgentRuntime:
-  runtimeSessionId = session_id     -> context.session_id in the agent
-  runtimeUserId    = actor_id       -> also sent in payload for reliability
-
-Agent configures AgentCoreMemoryConfig:
-  actor_id   -> long-term memory namespaces: /users/{actor_id}/facts, /users/{actor_id}/preferences
-  session_id -> short-term memory: conversation turns stored as events
-```
-
-When the user sends an image, the agent creates a detailed text description. That description enters short-term memory as a conversation event, and AgentCore automatically extracts facts into long-term memory. Even after the session events expire, the extracted facts remain — so the agent can answer questions about that image months later.
 
 ## How do I deploy?
 
-Deploy stacks in order. Each subsequent stack reads configuration from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) parameters exported by Stack 00.
+Deploy in order. The channel stacks read the SSM parameters that stack 00 writes.
 
-### Step 1: Deploy the shared AgentCore Runtime (required)
+1. **Stack 00** (required): `cd 00-agent-agentcore`, install, `npx aws-cdk@latest deploy`. Then store the TwelveLabs key:
+   ```bash
+   aws secretsmanager put-secret-value --secret-id <TwelveLabsSecretArn output> \
+     --secret-string '{"TL_API_KEY":"<your key>"}'
+   ```
+2. **Stack 01 or stack 02**: follow the README of the stack for the WhatsApp or Meta setup, then `npx aws-cdk@latest deploy`.
+3. **Optional**: enable [CloudWatch Transaction Search](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) once per account to see AgentCore traces.
 
-```bash
-cd 00-agent-agentcore
-python3 -m venv .venv && source .venv/bin/activate
-uv pip install -r requirements.txt
-bash create_deployment_package.sh   # builds ARM64 deployment ZIP
-cdk deploy
-```
+### What are the prerequisites?
 
-After deployment, update the TwelveLabs API key in [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) (required for video analysis):
+- [AWS CLI](https://aws.amazon.com/cli/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with credentials, and a [CDK bootstrapped](https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) account and Region.
+- Node.js (for `npx aws-cdk@latest`), Python 3.11 or later and [uv](https://docs.astral.sh/uv/). Stacks 00 and 02 call `uv` during `cdk synth` to build the arm64 packages, so the first synth needs network access.
+- Amazon Bedrock model access for `global.anthropic.claude-sonnet-4-6` (or your `model_id`).
+- Stack 01: [AWS End User Messaging Social](https://aws.amazon.com/end-user-messaging/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with a WhatsApp Business number. Stack 02: a [Meta Developer](https://developers.facebook.com/) app with WhatsApp, and for Instagram a Professional account linked to Meta Accounts Center.
+- Optional: a [TwelveLabs](https://www.twelvelabs.io/) API key for video.
 
-```bash
-aws secretsmanager put-secret-value \
-  --secret-id <TwelveLabsSecretArn from stack output> \
-  --secret-string '{"TL_API_KEY":"your-actual-key"}'
-```
+## How is it observed?
 
-You can obtain a TwelveLabs API key from the [TwelveLabs Dashboard](https://dashboard.twelvelabs.io/).
-
-### Step 2a: Deploy WhatsApp via End User Messaging (Option A)
-
-```bash
-cd 01-whatsapp-end-user-messaging
-python3 -m venv .venv && source .venv/bin/activate
-uv pip install -r requirements.txt
-cdk deploy
-```
-
-Requires [AWS End User Messaging Social](https://aws.amazon.com/end-user-messaging/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) configured with a WhatsApp Business number. See the [Stack 01 README](./01-whatsapp-end-user-messaging/README.md) for setup details.
-
-### Step 2b: Deploy WhatsApp + Instagram via API Gateway (Option B)
-
-```bash
-cd 02-multichannel-api-gateway
-python3 -m venv .venv && source .venv/bin/activate
-uv pip install -r requirements.txt
-cdk deploy
-```
-
-Requires a [Meta Developer account](https://developers.facebook.com/) with WhatsApp Business API access. For Instagram DMs, you also need an [Instagram Professional account](https://help.instagram.com/502981923235522) linked to [Meta Accounts Center](https://accountscenter.meta.com/). Both channels share the same webhook endpoint. See the [Stack 02 README](./02-multichannel-api-gateway/README.md) for WhatsApp and Instagram configuration.
-
-### Step 3 (optional): Test with the notebook
-
-```bash
-cd notebook
-jupyter notebook
-```
-
-Open the notebook and follow the instructions to invoke the agent directly, without a WhatsApp frontend.
-
-## What are the prerequisites?
-
-- [AWS CLI](https://aws.amazon.com/cli/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) configured with appropriate credentials
-- [AWS CDK](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) v2 installed (`npm install -g aws-cdk`)
-- Python 3.11 or later
-- [uv](https://docs.astral.sh/uv/) package manager for Python dependency management
-- For Option A (Stack 01): [AWS End User Messaging Social](https://aws.amazon.com/end-user-messaging/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) configured with a WhatsApp Business number
-- For Option B (Stack 02): [Meta Developer account](https://developers.facebook.com/) with WhatsApp Business API access. For Instagram: an [Instagram Professional account](https://help.instagram.com/502981923235522) linked to [Meta Accounts Center](https://accountscenter.meta.com/)
-- For video analysis: A [TwelveLabs](https://www.twelvelabs.io/) API key
+The runtime sends OpenTelemetry data through the AWS Distro for OpenTelemetry and writes JSON logs to CloudWatch Logs. Logs contain hashed IDs, channel, media type and exception types, never message text or phone numbers. AgentCore traces and spans show up in CloudWatch after you enable Transaction Search once per account (see step 3 above). Lambdas have active X-Ray tracing and 30 day log groups.
 
 ## What are the known limitations?
 
-- **Payload size limit**: The AgentCore Runtime `InvokeAgentRuntime` API has a payload size limit. Base64-encoded images over ~1.5 MB may cause **500 errors**. For large images, consider resizing or compressing before sending, or uploading to S3 and passing the URI.
+- **Payload size**: images and documents above about 1.5 MB are refused with a friendly message. Resize them before sending.
+- **Memory extraction is asynchronous**: facts from a conversation can take a few minutes to appear. When you test cross-channel memory, wait 2 to 3 minutes before switching channels.
+- **Retrieval is semantic**: a vague question such as "what did I send you?" may not retrieve a specific image fact. The agent prompt asks the model to write explicit "Fact:" lines to help extraction.
+- **Invalid content in memory is permanent**: it cannot be deleted per record, so all media is validated before it reaches the agent.
+- **One call per agent instance**: Strands raises `ConcurrencyException` on overlapping calls. The runtime builds one agent per request to avoid it.
+- **Session caching**: a microVM keeps state for up to 8 hours or 15 idle minutes. If you delete rows from the users table while testing, use a new `session_id`.
+- **Account linking trusts the identifier typed in chat**: the acting user is bound to the verified sender (the model cannot choose it) and merging with an existing record is off by default (`LINK_ALLOW_MERGE=true` turns it on). A user can still claim someone else's phone number or username as an identifier, so add out-of-band verification before real use.
+- **Upgrading from the original sample**: the memory and runtime names changed to `...V2`, so CloudFormation creates new resources. Existing AgentCore Memory data is not carried over to the new memory; users start with empty long-term memory. Export anything you need first, and delete the old resources after you verify the new ones.
+- **Public runtime endpoint with SigV4**: the runtime uses PUBLIC network mode with IAM authentication, called only by your Lambdas. Use VPC mode if you need private networking.
 
-- **Runtime session lifecycle**: Sessions stay alive for up to 8 hours and terminate after 15 minutes of inactivity. After redeploying agent code or IAM role changes, wait for the idle timeout or start a new session to pick up changes. See [Runtime Sessions documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
+## What was not validated?
 
-- **Runtime initialization timeout (30 seconds)**: The deployment package must include `bedrock-agentcore-starter-toolkit` in `requirements.txt`, and `multimodal_agent.py` must end with `app.run()`. Without these, the runtime fails to start within the initialization window.
+The changes in this version were verified offline: unit tests, CDK assertion tests and `cdk synth` with fake credentials. These paths need a real account or provider and were **not** run live:
 
-- **Content block ordering**: When sending multimodal content blocks to the agent, text must be the **first** content block. `AgentCoreMemorySessionManager` reads `content[0]["text"]` and will fail with a `KeyError` if the first block is an image or document.
+- Deploying any stack, and the AgentCore Runtime starting with the new Python 3.13 package.
+- Calls to Bedrock, AgentCore Memory (strategies, namespaces, retrieval), TwelveLabs, Amazon Transcribe and End User Messaging Social.
+- Real Meta webhooks: signature verification is tested with computed signatures, not with traffic from Meta. The accepted `metaApiVersion` values of End User Messaging Social are unconfirmed; `v25.0` is the default and you can set `-c meta_api_version=`.
+- The notebooks' calls to AWS (their offline cells were run).
+- Cost, latency and the buffering savings figure.
 
-- **Memory contamination is permanent**: If invalid content enters AgentCore Memory, it cannot be deleted per-record. The entire Memory resource must be recreated. All media must be validated before reaching the agent.
+See [docs/AUDIT.md](./docs/AUDIT.md), section "Deferred / not validated offline", for the complete list.
 
-- **Long-term memory extraction is asynchronous**: [AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-types.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) extracts long-term insights (facts, preferences, summaries) from short-term conversation events **asynchronously in the background**. This means facts from the current conversation may not be immediately available for retrieval — they typically appear after a few minutes. If you test cross-channel memory (e.g., share information on WhatsApp, then ask about it on Instagram), allow 2-3 minutes for the extraction and consolidation process to complete before switching channels. This is normal AgentCore behavior, not a bug. See [Memory types](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-types.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
+## What are good next steps?
 
-- **Memory retrieval is semantic, not exhaustive**: AgentCore Memory retrieves facts using semantic similarity to the user's current message. If the user asks a generic question (e.g., "what did I send you?"), relevant facts about specific images or videos may not be retrieved because the similarity score is too low. The agent is configured with `top_k: 20` for facts and `top_k: 10` for preferences with a `relevance_score` threshold of `0.3` to maximize context. If facts are still missing, lower the `relevance_score` further or increase `top_k` in the `retrieval_config` in `multimodal_agent.py`.
+AgentCore offers services that this sample does not deploy yet:
 
-- **Memory extraction summarizes aggressively**: AgentCore Memory extracts facts as short summaries, not verbatim conversation text. Structured data like video IDs or file names can be lost during extraction. The agent's system prompt instructs it to include explicit "Fact:" lines in responses (e.g., `"Fact: User shared video ID 69c712d1..., which shows..."`) to improve extraction quality. This is a workaround for the summarization behavior of the [extraction and consolidation strategies](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-types.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
-
-- **Memory retrieval namespace format**: Long-term memory records are stored under `/strategies/{memoryStrategyId}/actors/{actorId}/`, not `/users/{actorId}/facts`. The `retrieval_config` in the agent must use the correct namespace format with the actual strategy IDs (e.g., `UserFacts-A4ltmlGX3P`). Strategy IDs are generated by CloudFormation when the Memory resource is created and are passed to the agent via environment variables (`FACTS_STRATEGY_ID`, `PREFERENCES_STRATEGY_ID`).
-
-- **No concurrent invocations per session**: [Strands Agents](https://strandsagents.com/) does not support concurrent calls to the same Agent instance by default (raises `ConcurrencyException`). If two tumbling windows fire simultaneously for the same user (e.g., a video still processing when a text arrives), the second invocation fails. The processor handles this via retry with exponential backoff. Reference: [Strands SDK concurrent invocations](https://github.com/strands-agents/sdk-python/issues/1702).
-
-- **MicroVM session caching**: AgentCore reuses the same microVM for a given `session_id` for up to 8 hours (default [15 minutes idle timeout](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)). The agent and its `actor_id` are cached in the microVM. If you delete users from the unified users table during testing, the microVM will continue using the old `actor_id` until it terminates. To force a fresh start, wait 15 minutes for the idle timeout, call the [StopRuntimeSession API](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el), or use a different `session_id`.
+- [AgentCore Gateway](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to expose business APIs and Lambda functions to the agent as MCP tools.
+- [AgentCore Identity](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to manage outbound credentials for those tools, and inbound authentication if you move away from SigV4.
+- [AgentCore Evaluations](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/evaluations.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to score real conversations and catch regressions after a model or prompt change.
+- VPC network mode for the runtime and a Bedrock Guardrail (`-c guardrail_id=...` is already supported).
 
 ## Troubleshooting
 
 | Symptom | Resolution |
 |---------|------------|
-| SSM parameter not found | Ensure Stack 00 (`00-agent-agentcore`) is deployed first, in the same AWS account and region. |
-| AgentCore Memory errors | Verify the Memory ID is correctly set in the Runtime environment. See [AgentCore Memory documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el). |
-| WhatsApp webhook failures | Check [Amazon CloudWatch Logs](https://aws.amazon.com/cloudwatch/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) for the Lambda function handling webhooks. |
-| Media processing timeout | Lambda timeout is set to 5 minutes. Large files may need additional time or pre-processing. |
-| Video analysis S3 errors | The AgentCore runtime role needs `s3:GetObject` on the media bucket. Stack 01 grants this automatically using the runtime role ARN exported via SSM by Stack 00. |
-| Agent does not pick up new code | Wait 15 minutes for the idle timeout, or use a new `session_id` to force a fresh microVM. |
-| `RuntimeClientError` or 500 from AgentCore | The processor retries with exponential backoff (3 attempts). This typically occurs during cold starts after session resume, when a new microVM is being provisioned. If retries are exhausted, the user receives a fallback error message. See [InvokeAgentRuntime API errors](https://docs.aws.amazon.com/bedrock-agentcore/latest/APIReference/API_InvokeAgentRuntime.html). |
-| Cross-channel memory not working immediately | Long-term memory extraction is asynchronous. After sharing information on one channel, wait 2-3 minutes before testing from the other channel. Facts need time to be extracted into long-term memory. |
-| Agent uses wrong `actor_id` after table cleanup | The microVM caches the agent and `actor_id` per `session_id`. If you deleted users from the unified users table, wait 15 minutes for the microVM idle timeout before testing again. |
-
-For additional help, consult the [Amazon Bedrock AgentCore Developer Guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el).
+| SSM parameter not found at deploy | Deploy stack 00 first, in the same account and Region. |
+| `cdk synth` fails on stack 00 or 02 at the build step | Install `uv` and allow network access, or pass a prebuilt package with `-c package_path=...` (stack 00) or `-c layer_path=...` (stack 02). |
+| Webhook returns 403 | The Meta app secret in Secrets Manager is missing, still a placeholder, or does not match the app that sends the webhook. |
+| Agent does not use new code | Wait 15 minutes or use a new `session_id`. |
+| `RuntimeClientError` or 500 from AgentCore | The processor retries with backoff. It usually happens on a cold start; check the runtime logs. |
+| Cross-channel memory is empty | Extraction is asynchronous; wait a few minutes. |
+| No traces in CloudWatch | Enable Transaction Search once per account. |
 
 ## Frequently asked questions
 
-**Can the same agent serve WhatsApp and Instagram simultaneously?**
-Yes. Stack 02 (`02-multichannel-api-gateway`) uses a single API Gateway webhook endpoint that receives both WhatsApp and Instagram messages. The receiver Lambda detects the channel from the webhook payload and normalizes both into a common format for the same agent.
+**Can the same agent serve WhatsApp and Instagram?**
+Yes. Stack 02 receives both on one webhook, detects the channel from the payload and sends the replies through the right API.
 
-**Does the agent remember conversations across channels?**
-Yes. A unified users table maps WhatsApp phone numbers and Instagram IDs to a single canonical `user_id`. When both accounts are linked, the agent uses the same `actor_id` in AgentCore Memory, so long-term facts and preferences persist across WhatsApp and Instagram.
+**Does the agent remember me across channels?**
+Yes, after the account is linked. The unified users table maps the WhatsApp phone and the Instagram ID to one canonical ID that becomes the memory `actor_id`.
 
-**What happens if I only deploy Stack 01 (WhatsApp via SNS)?**
-The agent works as a WhatsApp-only assistant. Cross-channel features (Instagram, account linking) are only available with Stack 02. The agent detects this automatically and does not offer linking when the unified users table is not deployed.
+**What happens if I deploy only stack 01?**
+You get a WhatsApp-only assistant. Linking and Instagram need stack 02, and the agent only offers linking when the user ID tag is present.
 
-**How much does message buffering save?**
-The DynamoDB Streams tumbling window batches rapid-fire messages into a single AgentCore invocation. Based on real-world WhatsApp usage patterns, this achieves approximately a 4:1 aggregation ratio, reducing AgentCore Runtime invocations and LLM token usage by about 75%. Source: [sample-whatsapp-end-user-messaging-connect-chat](https://github.com/aws-samples/sample-whatsapp-end-user-messaging-connect-chat).
+**How do I use a different model?**
+Pass `-c model_id=<model or inference profile ID>` to `cdk deploy` in stack 00. IAM follows the model automatically. Check [model lifecycle](https://docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) before you pick one.
 
-**Can I add more channels (Messenger, web chat, mobile)?**
-Yes. The AgentCore Runtime and Memory layer is channel-agnostic. Any system that calls the `InvokeAgentRuntime` API can serve as a frontend. See the [channel table](#what-channels-can-connect-to-this-agent) for integration strategies.
+**Can I add Telegram or a web chat?**
+Yes. Write a receiver that normalizes the message, keep the same payload and call `InvokeAgentRuntime`.
+
+**Can I use another agent framework?**
+The pattern also fits other frameworks. This sample uses Strands Agents for its tool and memory integration.
 
 ---
 

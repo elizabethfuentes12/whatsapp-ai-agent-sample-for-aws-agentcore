@@ -4,15 +4,19 @@ Process text, images, video, audio, and documents from WhatsApp using a 2-Lambda
 
 [AWS Lambda](https://aws.amazon.com/lambda/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) handles message reception and processing, while [Amazon Bedrock AgentCore Runtime](https://aws.amazon.com/bedrock/agentcore/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) provides persistent conversation context.
 
+This sample works with Amazon Bedrock AgentCore.
+
+> Code in this repository is provided "as is", and is not officially supported by Amazon.
+
 > Your data will be securely stored in your AWS account and will not be shared or used for model training. It is not recommended to share private information because the security of data with WhatsApp is not guaranteed.
 
 | Voice notes | Image |
 |----------|------------|
-|![Voice notes](./images/voice-note.gif)| ![Image](./images/image-whatsapp-agent.gif) |
+|![Voice notes](../images/voice-note.gif)| ![Image](../images/image-whatsapp-agent.gif) |
 
 | Video | Document |
 |--------------|--------------|
-|![Video](./images/video-whatsapp-agent.gif)|![Document](./images/documents.gif)|
+|![Video](../images/video-whatsapp-agent.gif)|![Document](./images/documents.gif)|
 
 ✅ **AWS Level**: Advanced - 300
 
@@ -21,7 +25,7 @@ Process text, images, video, audio, and documents from WhatsApp using a 2-Lambda
 - [AWS Account](https://aws.amazon.com/resources/create-account/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Foundational knowledge of Python](https://catalog.us-east-1.prod.workshops.aws/workshops/3d705026-9edc-40e8-b353-bdabb116c89c/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [AWS CLI configured](https://docs.aws.amazon.com/cli/v1/userguide/cli-chap-configure.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) with appropriate permissions
-- [Python 3.11](https://www.python.org/downloads/) or later
+- [Python 3.11](https://www.python.org/downloads/) or later and Node.js for `npx aws-cdk@latest` (the Lambda functions run on Python 3.13, arm64)
 - [AWS Cloud Development Kit (CDK)](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) v2 or later
 - [Have or create a Meta Business Account](https://docs.aws.amazon.com/social-messaging/latest/userguide/getting-started-whatsapp.html#getting-started-embedded?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - Stack `00-agent-agentcore` deployed (provides SSM parameters)
@@ -33,7 +37,7 @@ Process text, images, video, audio, and documents from WhatsApp using a 2-Lambda
 
 ### What infrastructure is deployed?
 
-This stack deploys two Lambda functions, a DynamoDB table with Streams, an S3 bucket, and an SNS topic -- all connected to Amazon Bedrock AgentCore. The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to define and deploy the following resources:
+This stack deploys two Lambda functions, a DynamoDB table with Streams, an S3 bucket, and an SNS topic, all connected to Amazon Bedrock AgentCore. The project uses [AWS Cloud Development Kit (AWS CDK)](https://aws.amazon.com/cdk/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) to define and deploy the following resources:
 
 - [AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el):
   - `webhook_receiver`: Receives WhatsApp messages via SNS, downloads media to S3, saves to DynamoDB for buffering.
@@ -134,53 +138,74 @@ s3://media-bucket/
 
 | File | Purpose |
 |------|---------|
-| `app.py` | Entry point for the CDK application |
-| `whatsapp_end_user_messaging/whatsapp_stack.py` | Main stack definition |
-| `lambdas/code/whatsapp_handler/lambda_function.py` | Main handler -- routes by message type, processes media, invokes agent |
-| `lambdas/code/whatsapp_handler/whatsapp_service.py` | Parses SNS/WhatsApp webhook, message extraction, reply/reaction methods |
-| `lambdas/code/whatsapp_handler/agentcore_service.py` | Invokes Amazon Bedrock AgentCore Runtime with actor/session IDs |
-| `lambdas/project_lambdas.py` | CDK construct for Lambda + IAM permissions |
-| `get_param.py` | Reads AgentCore ARN and role ARN from [AWS Systems Manager Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el) at CDK synthesis time |
+| `app.py` | Entry point of the CDK app |
+| `whatsapp_end_user_messaging/whatsapp_stack.py` | Stack: SSM parameters, bucket, table, topic, Lambdas, outputs |
+| `whatsapp_end_user_messaging/config.py` | Graph API version (`v25.0`), TTL, media limit, context helpers |
+| `topic/topic.py` | SNS topic; only `social-messaging.amazonaws.com` of this account may publish |
+| `lambdas/project_lambdas.py` | Both Lambdas (Python 3.13, arm64, tracing), queues, event source mapping, scoped IAM |
+| `lambdas/code/whatsapp_handler/` | Receiver: checks the SNS record, downloads media to S3, conditional put in DynamoDB |
+| `lambdas/code/message_processor/` | Processor: claims messages, aggregates, transcribes, invokes AgentCore, replies |
+| `tests/` | 41 offline tests: helpers, idempotency, receiver, processor, CDK assertions |
+
+### How are errors and retries handled?
+
+- The receiver does a conditional put on `(from_phone, id)`. A redelivered SNS message does not create a second item.
+- The processor claims each message (`proc_state` processing, then done) and releases the claim on failure, so a tumbling window that delivers a record twice does not answer twice.
+- The stream source has a retry limit, a record age limit, bisect on error and an SQS on-failure destination (`ProcessorFailureQueueUrl`). The processor returns the tumbling window `state` and partial `batchItemFailures`.
+- The receiver has a dead-letter queue (`HandlerDeadLetterQueueUrl`) and two retries.
+- AgentCore calls are retried with backoff for 424, 429 and 500 responses. If they still fail, the user gets a short fallback message.
+- Messages larger than the inline media limit (about 1.5 MB) get a friendly "too large" reply.
+
+### How is data protected?
+
+- No public endpoint: SNS delivers to Lambda with IAM. The receiver also rejects records whose `EventSource` is not `aws:sns` or whose topic ARN differs from `EXPECTED_TOPIC_ARN`.
+- IAM is scoped: `social-messaging` actions to the phone number ARN pattern, Transcribe to `whatsapp-audio-*` jobs, invoke permissions to the runtime ARN.
+- Logs are JSON with message IDs, counts and exception types. Phone numbers are masked and message text is never logged.
+- The table uses server-side encryption and a 48 hour TTL; the bucket expires media after 30 days. Context `retain_data=true` switches table and bucket to RETAIN with deletion protection and point-in-time recovery.
 
 ## How do I deploy this stack?
 
-### Installation
+Deploy `00-agent-agentcore` first. This stack reads `/agentcore/agent_runtime_arn` and `/agentcore/runtime_role_arn` from SSM when CloudFormation deploys, not when you synthesize.
 
-✅ **Clone the repository**:
-```
+```bash
 git clone https://github.com/aws-samples/whatsapp-ai-agent-sample-for-aws-agentcore
-cd 01-whatsapp-end-user-messaging
-```
-
-✅ **Create and activate a virtual environment**:
-```
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-✅ **Install dependencies**:
-```
+cd whatsapp-ai-agent-sample-for-aws-agentcore/01-whatsapp-end-user-messaging
+uv venv .venv --python 3.11 && source .venv/bin/activate
 uv pip install -r requirements.txt
+npx aws-cdk@latest deploy
 ```
 
-✅ **Synthesize the CloudFormation template**:
-```
-cdk synth
+Note the `WhatsAppTopicArn` output; you choose it as the event destination in the next section.
+
+### How do I test it without AWS credentials?
+
+```bash
+uv pip install -r requirements-dev.txt
+python -m pytest -q
+export AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=x CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1
+npx --yes aws-cdk@latest synth --quiet
 ```
 
-✅ **Deploy**:
-```
-cdk deploy
-```
+### Which options can I change?
 
-> Note the output values, especially the Amazon SNS Topic ARN, which will be used for configuring the WhatsApp integration.
+CDK context, passed as `cdk deploy -c key=value`:
+
+| Context key | Default | Effect |
+|-------------|---------|--------|
+| `meta_api_version` | `v25.0` | Graph API version sent to End User Messaging Social. Change it if the service rejects it in your Region. |
+| `media_retention_days` | 30 | Expiration of media in the bucket |
+| `retain_data` | false | `true` keeps table and bucket on stack deletion and enables deletion protection and PITR |
+| `processor_reserved_concurrency` | unset | Reserved concurrency for the processor Lambda |
+| `topic_source_arn_pattern` | unset | Adds an `aws:SourceArn` condition to the topic policy |
+
+The buffer window is 20 seconds (`buffer_seconds` argument of the Lambda construct).
 
 ## How do I configure WhatsApp integration?
 
 ### Step 0: Activate WhatsApp account
 
 1. [Get Started with the New WhatsApp Business Platform](https://www.youtube.com/watch?v=CEt_KMMv3V8&list=PLX_K_BlBdZKi4GOFmJ9_67og7pMzm2vXH&index=2&t=17s&pp=gAQBiAQB)
-2. [How To Generate a Permanent Access Token — WhatsApp API](https://www.youtube.com/watch?v=LmoiCMJJ6S4&list=PLX_K_BlBdZKi4GOFmJ9_67og7pMzm2vXH&index=1&t=158s&pp=gAQBiAQB)
+2. [How To Generate a Permanent Access Token for the WhatsApp API](https://www.youtube.com/watch?v=LmoiCMJJ6S4&list=PLX_K_BlBdZKi4GOFmJ9_67og7pMzm2vXH&index=1&t=158s&pp=gAQBiAQB)
 
 ### Step 1: AWS End User Messaging Social Set Up
 
@@ -207,17 +232,48 @@ This stack depends on the Amazon Bedrock AgentCore Runtime deployed in `00-agent
 
 If you finish testing and want to clean the application:
 
-1. Delete the files from the Amazon S3 bucket created in the deployment.
-2. Run this command in your terminal:
+1. Run this command in your terminal:
 
+```bash
+npx aws-cdk@latest destroy
 ```
-cdk destroy
-```
+
+The bucket is created with `auto_delete_objects`, so `destroy` empties it first. If you deployed with `-c retain_data=true`, the table and the bucket stay in your account; delete them yourself when you are done.
+
+## Troubleshooting
+
+| Symptom | Resolution |
+|---------|------------|
+| `cdk deploy` cannot find an SSM parameter | Deploy stack 00 first, in the same account and Region. |
+| No reply on WhatsApp | Check that `WhatsAppTopicArn` is the event destination in End User Messaging Social, then read the receiver and processor log groups in CloudWatch Logs. |
+| Messages are dropped by the receiver | The record did not come from the expected topic. Check `EXPECTED_TOPIC_ARN` and the topic policy. |
+| `ProcessorFailureQueueUrl` has messages | The stream batch failed repeatedly. Inspect the processor logs for the exception type. |
+| Reply says the file is too large | Media above about 1.5 MB is not sent to the agent. Send a smaller file. |
+| The service rejects the API version | Deploy with `-c meta_api_version=<version>` for a version your Region supports. |
+| Agent seems to use old code | Wait 15 minutes for idle sessions to end or use a new session. |
+
+## Frequently asked questions
+
+**Do I need a Meta app for this stack?**
+No. AWS End User Messaging Social links your WhatsApp Business Account to AWS. You still need a Meta Business Account.
+
+**Why is the processor Lambda timeout 10 minutes?**
+It may transcribe audio (up to 2 minutes) and wait for the agent. It stops starting new AgentCore calls when less than 30 seconds remain.
+
+**Is a message answered twice if Lambda retries?**
+No. The conditional put and the per-message claim make the flow idempotent.
+
+**Can I use Instagram with this stack?**
+No. Instagram DMs need the Meta webhook in `02-multichannel-api-gateway`.
+
+**What did I not verify?**
+This README was checked against the code and `cdk synth` only. The End User Messaging Social calls, WhatsApp delivery and the AgentCore runtime were not run in a live account. See [docs/AUDIT.md](../docs/AUDIT.md).
 
 ## Where can I learn more?
 
 - [Automate workflows with WhatsApp using AWS End User Messaging Social](https://aws.amazon.com/blogs/messaging-and-targeting/whatsapp-aws-end-user-messaging-social/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Amazon Bedrock AgentCore documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
+- [Strands Agents documentation](https://strandsagents.com/?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Amazon Bedrock AgentCore Runtime Sessions](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 - [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html?trk=87c4c426-cddf-4799-a299-273337552ad8&sc_channel=el)
 
